@@ -65,7 +65,7 @@ export function ReceptionistWizard({ existing, onDone, onCancel }: { existing: R
   return (
     <div>
       <button type="button" onClick={onCancel} className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-4" /> Back to AI Receptionist
+        <ArrowLeft className="size-4" /> Back to AI Agent
       </button>
       <h1 className="mb-6 text-2xl font-semibold tracking-tight">{existing ? "Edit AI Receptionist" : "Create AI Receptionist"}</h1>
 

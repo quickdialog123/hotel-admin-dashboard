@@ -11,12 +11,12 @@ import { useAsync } from "@/lib/hooks/use-async"
 import { formatDate } from "@/lib/format"
 
 const quickLinks = [
-  { href: "/conversations", label: "Conversations", desc: "See what guests are asking", icon: MessageSquare },
+  { href: "/conversations", label: "Inbox", desc: "See what guests are asking", icon: MessageSquare },
   { href: "/knowledge-base", label: "Knowledge Base", desc: "Train your receptionist", icon: BookOpen },
   { href: "/catalogue", label: "Catalogue", desc: "Manage room service items", icon: Utensils },
   { href: "/guests", label: "Guests", desc: "Browse the guest directory", icon: Users },
-  { href: "/receptionist", label: "AI Receptionist", desc: "Tone, persona and behaviour", icon: Bot },
-  { href: "/broadcasts", label: "Broadcasts", desc: "Message templates & sends", icon: Radio },
+  { href: "/receptionist", label: "AI Agent", desc: "Tone, persona and behaviour", icon: Bot },
+  { href: "/broadcasts", label: "Broadcasts", desc: "Campaigns & sends", icon: Radio },
 ]
 
 export default function DashboardPage() {

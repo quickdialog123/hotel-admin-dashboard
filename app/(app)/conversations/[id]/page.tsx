@@ -34,7 +34,7 @@ export default function ConversationDetailPage() {
 
   const back = (
     <Link href="/conversations" className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-      <ArrowLeft className="size-4" /> Conversations
+      <ArrowLeft className="size-4" /> Inbox
     </Link>
   )
   if (error) return <>{back}<ErrorState message={error} onRetry={reload} /></>

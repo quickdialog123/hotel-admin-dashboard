@@ -85,10 +85,10 @@ export function TemplateWizard() {
     setSaving(true)
     try {
       await saveTemplate({ name, category, language, header, body: body.trim(), footer: footer.trim() || null, buttons: cleanButtons }, { submit })
-      toast.success(submit ? "Submitted to Meta for review" : "Draft saved")
-      router.push("/broadcasts?tab=templates")
+      toast.success(submit ? "Campaign submitted to Meta for review" : "Draft saved")
+      router.push("/campaigns")
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't save template")
+      toast.error(e instanceof Error ? e.message : "Couldn't save campaign")
       setSaving(false)
     }
   }
@@ -211,7 +211,7 @@ export function TemplateWizard() {
         )}
 
         <div className="mt-8 flex items-center justify-between gap-2 border-t pt-4">
-          <Button variant="ghost" onClick={step === 0 ? () => router.push("/broadcasts?tab=templates") : () => setStep(step - 1)}>{step === 0 ? "Cancel" : "Back"}</Button>
+          <Button variant="ghost" onClick={step === 0 ? () => router.push("/campaigns") : () => setStep(step - 1)}>{step === 0 ? "Cancel" : "Back"}</Button>
           {step < STEPS.length - 1 ? (
             <Button className="rounded-xl" onClick={next}>Next</Button>
           ) : (

@@ -43,7 +43,7 @@ export default function NewBroadcastPage() {
   if (error) return <>{back}<ErrorState message={error} onRetry={() => { templates.reload(); segments.reload() }} /></>
   if (!templates.data || !segments.data) return <>{back}<Skeleton className="h-96 rounded-2xl" /></>
   if (approved.length === 0)
-    return <>{back}<EmptyState title="No approved templates" description="You need at least one template approved by Meta before you can send a broadcast." action={<Link href="/broadcasts/templates/new" className={buttonVariants({ className: "rounded-xl" })}>Create a template</Link>} /></>
+    return <>{back}<EmptyState title="No approved campaigns" description="You need at least one campaign approved by Meta before you can send a broadcast." action={<Link href="/campaigns/new" className={buttonVariants({ className: "rounded-xl" })}>Create a campaign</Link>} /></>
 
   return (
     <>
@@ -58,9 +58,9 @@ export default function NewBroadcastPage() {
           </div>
 
           <section className="space-y-3 rounded-2xl border bg-white p-6">
-            <h2 className="font-semibold">1. Template</h2>
+            <h2 className="font-semibold">1. Campaign</h2>
             <div>
-              <PillSelect label="Template" value={templateId} onChange={(v) => { setTemplateId(v); setValues({}) }} options={[...(templateId ? [] : [{ value: "", label: "Choose an approved template…" }]), ...approved.map((t) => ({ value: t.id, label: t.name }))]} />
+              <PillSelect label="Campaign" value={templateId} onChange={(v) => { setTemplateId(v); setValues({}) }} options={[...(templateId ? [] : [{ value: "", label: "Choose an approved campaign…" }]), ...approved.map((t) => ({ value: t.id, label: t.name }))]} />
             </div>
           </section>
 
@@ -111,7 +111,7 @@ export default function NewBroadcastPage() {
 
         <aside aria-label="Preview" className="lg:sticky lg:top-24 lg:self-start">
           <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">Preview</p>
-          {template ? <TemplatePreview category={template.category} header={template.header} body={template.body} footer={template.footer} buttons={template.buttons} values={values} /> : <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">Choose a template to see a preview.</div>}
+          {template ? <TemplatePreview category={template.category} header={template.header} body={template.body} footer={template.footer} buttons={template.buttons} values={values} /> : <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">Choose a campaign to see a preview.</div>}
         </aside>
       </div>
 

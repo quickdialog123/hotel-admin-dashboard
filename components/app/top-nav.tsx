@@ -2,51 +2,105 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LogOut, Sparkles } from "lucide-react"
+import { ChevronDown, LogOut, Settings, Sparkles, User } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-export const NAV_ITEMS = [
+type NavLink = { href: string; label: string }
+type NavItem = NavLink & {
+  /** Sibling pages revealed by the pill's dropdown chevron. */
+  children?: NavLink[]
+}
+
+// Five top-level items: two standalone tabs and three grouped pills.
+// Clicking a grouped pill opens its default page (its own href); the chevron reveals the siblings.
+// Note the group "Conversations" lands on the page labelled "Inbox".
+export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/whatsapp", label: "WhatsApp" },
-  { href: "/knowledge-base", label: "Knowledge Base" },
-  { href: "/catalogue", label: "Catalogue" },
-  { href: "/guests", label: "Guests" },
-  { href: "/receptionist", label: "AI Receptionist" },
-  { href: "/broadcasts", label: "Broadcasts" },
-  { href: "/conversations", label: "Conversations" },
-  { href: "/settings", label: "Settings" },
+  { href: "/receptionist", label: "AI Agent", children: [{ href: "/knowledge-base", label: "Knowledge Base" }] },
+  {
+    href: "/broadcasts",
+    label: "Marketing",
+    children: [
+      { href: "/campaigns", label: "Campaigns" },
+      { href: "/catalogue", label: "Catalogue" },
+    ],
+  },
+  { href: "/conversations", label: "Conversations", children: [{ href: "/guests", label: "Guests" }] },
 ]
+
+const isWithin = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/")
+
+const pillBase = "text-[15px] font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-slate-900/25"
 
 export function TopNav() {
   const pathname = usePathname()
+  const settingsActive = isWithin(pathname, "/settings")
+
   return (
     <header className="sticky top-0 z-40 border-b bg-white">
       <div className="mx-auto flex h-[60px] max-w-[1680px] items-center gap-8 px-4 sm:px-6">
         <Link href="/dashboard" className="flex shrink-0 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-slate-900/20">
-          <span className="flex size-9 items-center justify-center rounded-xl bg-slate-900 text-white"><Sparkles className="size-[18px]" aria-hidden /></span>
+          <span className="flex size-9 items-center justify-center rounded-xl bg-slate-900 text-white">
+            <Sparkles className="size-[18px]" aria-hidden />
+          </span>
           <span className="hidden text-[15px] font-semibold sm:inline">Concierge</span>
         </Link>
-        <nav aria-label="Main" className="-mx-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1 py-1">
+
+        <nav aria-label="Main" className="flex min-w-0 flex-1 items-center gap-1">
           {NAV_ITEMS.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(item.href + "/")
+            // The parent pill is active whenever the current page is the pill itself or any page in its dropdown.
+            const active = isWithin(pathname, item.href) || !!item.children?.some((c) => isWithin(pathname, c.href))
+            const tone = active ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"
+
+            if (!item.children) {
+              return (
+                <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cn(pillBase, "shrink-0 rounded-lg px-3 py-1.5", tone)}>
+                  {item.label}
+                </Link>
+              )
+            }
+
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "shrink-0 rounded-lg px-3 py-1.5 text-[15px] font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-slate-900/25",
-                  active ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900",
-                )}
-              >
-                {item.label}
-              </Link>
+              <div key={item.href} className={cn("flex shrink-0 items-center rounded-lg", tone)}>
+                <Link href={item.href} aria-current={active ? "page" : undefined} className={cn(pillBase, "rounded-l-lg py-1.5 pr-1 pl-3")}>
+                  {item.label}
+                </Link>
+                <DropdownMenu>
+                  <DropdownMenuTrigger aria-label={`More in ${item.label}`} className={cn(pillBase, "flex items-center rounded-r-lg py-1.5 pr-2 pl-0.5")}>
+                    <ChevronDown className="size-3.5" aria-hidden />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="min-w-44 rounded-xl p-1.5">
+                    {item.children.map((c) => (
+                      <DropdownMenuItem key={c.href} render={<Link href={c.href} />} className="rounded-lg">
+                        {c.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             )
           })}
         </nav>
-        <Link href="/login" aria-label="Sign out" title="Sign out" className="flex size-9 shrink-0 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-slate-100 focus-visible:ring-3 focus-visible:ring-slate-900/25 focus-visible:outline-none">
-          <LogOut className="size-4" />
-        </Link>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label="Account menu"
+            className={cn("flex size-9 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-slate-900/25", settingsActive ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200")}
+          >
+            <User className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44 rounded-xl p-1.5">
+            <DropdownMenuItem render={<Link href="/settings" />} className="rounded-lg">
+              <Settings /> Settings
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem render={<Link href="/login" />} className="rounded-lg">
+              <LogOut /> Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   )

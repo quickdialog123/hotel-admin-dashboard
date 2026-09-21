@@ -23,7 +23,7 @@ export default function ConversationsPage() {
 
   return (
     <>
-      <PageHeader title="Conversations" description="Every guest chat with your AI receptionist. Step in whenever a guest needs a human." />
+      <PageHeader title="Inbox" description="Every guest chat with your AI receptionist. Step in whenever a guest needs a human." />
       <SearchBar className="mb-4" value={search} onChange={setSearch} placeholder="Search by guest, room number..." label="Search conversations" />
       {error ? (
         <ErrorState message={error} onRetry={reload} />

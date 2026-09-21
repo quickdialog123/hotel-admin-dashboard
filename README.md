@@ -12,9 +12,10 @@ npm install && npm run dev   # http://localhost:3000  (any email/password works)
 app/
   login/                 mocked login
   (app)/                 authenticated shell (top nav) + every section
-    dashboard/ whatsapp/ knowledge-base/ (+ assistant/) catalogue/
-    guests/ (+ [id]/) receptionist/ broadcasts/ (+ new/, [id]/, templates/new/)
-    conversations/ (+ [id]/) settings/
+    dashboard/ whatsapp/ settings/
+    receptionist/ (nav: "AI Agent")  knowledge-base/ (+ assistant/)
+    broadcasts/ (+ new/, [id]/)  campaigns/ (+ new/)  catalogue/      (nav: "Marketing")
+    conversations/ (+ [id]/) (nav: "Inbox")  guests/ (+ [id]/)         (nav: "Conversations")
 components/
   ui/                    shadcn primitives
   app/                   shared app components (top nav, pills, states, search bar, stepper, phone frame…)
@@ -25,6 +26,16 @@ lib/
   format.ts              price / date helpers
 API_CONTRACT.md          every function the UI calls, with types
 ```
+
+## Navigation
+
+Five top-level items: **Dashboard**, **WhatsApp**, and three grouped pills. Clicking a pill opens its default page; the chevron reveals siblings. The parent pill stays filled while you're on any page in its group. Settings and Sign out live in the account menu on the right. Config: `NAV_ITEMS` in `components/app/top-nav.tsx`.
+
+| Pill | Default page | Dropdown |
+| --- | --- | --- |
+| AI Agent | `/receptionist` | Knowledge Base |
+| Marketing | `/broadcasts` | Campaigns, Catalogue |
+| Conversations | `/conversations` (labelled "Inbox") | Guests |
 
 ## Swapping the mock layer for the real backend
 

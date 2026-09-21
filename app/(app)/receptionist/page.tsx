@@ -35,7 +35,7 @@ export default function ReceptionistPage() {
 
   return (
     <>
-      <PageHeader title="AI Receptionist" description="Who your AI is and how it behaves." />
+      <PageHeader title="AI Agent" description="Who your AI is and how it behaves." />
 
       {/* TODO(backend): confirm whether multiple named receptionist personas will ever be supported, or whether this stays single-agent-per-property */}
       <div className="mb-6 flex gap-3 rounded-2xl border bg-white p-4 text-sm">
