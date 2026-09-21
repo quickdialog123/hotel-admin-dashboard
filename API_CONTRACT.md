@@ -91,6 +91,8 @@ export type CatalogueItem = {
   priceCents: number
   category: string
   photoUrl: string | null
+  /** Free-form metadata labels, e.g. dietary info (Vegetarian, Gluten-free) or merchandising (Chef's pick). */
+  tags: string[]
   status: CatalogueStatus
   /** ISO timestamp */
   updatedAt: string

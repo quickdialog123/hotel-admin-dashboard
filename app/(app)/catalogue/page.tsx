@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/app/page-header"
 import { PillSelect } from "@/components/app/pill-select"
 import { StatusPill } from "@/components/app/status-pill"
 import { CardGridSkeleton, EmptyState, ErrorState } from "@/components/app/states"
+import { TagList } from "@/components/catalogue/tag-list"
 import { ItemFormDialog, STATUS_OPTIONS, Thumb, type ItemDraft } from "@/components/catalogue/item-form-dialog"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -168,6 +169,7 @@ export default function CataloguePage() {
                   {formatPrice(item.priceCents)} · {item.category}
                 </p>
               </button>
+              <div className="mt-2"><TagList tags={item.tags} /></div>
               {select(item)}
             </div>
           ))}
@@ -192,6 +194,7 @@ export default function CataloguePage() {
                     {formatPrice(item.priceCents)} · {item.category}
                   </span>
                 </span>
+                <span className="hidden sm:block"><TagList tags={item.tags} max={4} /></span>
                 <StatusBadge status={item.status} />
               </button>
             </li>

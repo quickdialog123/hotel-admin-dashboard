@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { ImagePlus, ShoppingBag, X } from "lucide-react"
+import { ImagePlus, Plus, ShoppingBag, X } from "lucide-react"
 import { PhoneFrame } from "@/components/app/phone-frame"
 import { PillSelect } from "@/components/app/pill-select"
 import { Button } from "@/components/ui/button"
@@ -9,12 +9,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { CATALOGUE_CATEGORIES, type CatalogueItem, type CatalogueStatus } from "@/lib/api/catalogue"
+import { CATALOGUE_CATEGORIES, SUGGESTED_TAGS, type CatalogueItem, type CatalogueStatus } from "@/lib/api/catalogue"
 import { formatPrice } from "@/lib/format"
 
 export type ItemDraft = Omit<CatalogueItem, "id" | "updatedAt">
 
-const emptyDraft: ItemDraft = { name: "", description: "", priceCents: 0, category: "Mains", photoUrl: null, status: "active" }
+const emptyDraft: ItemDraft = { name: "", description: "", priceCents: 0, category: "Mains", photoUrl: null, tags: [], status: "active" }
 export const STATUS_OPTIONS: { value: CatalogueStatus; label: string }[] = [
   { value: "active", label: "Active" },
   { value: "draft", label: "Draft" },
@@ -45,9 +45,10 @@ export function ItemFormDialog({ open, onOpenChange, item, onSave, onDelete }: {
 
 function ItemFormBody({ onOpenChange, item, onSave, onDelete }: { onOpenChange: (o: boolean) => void; item: CatalogueItem | null; onSave: (draft: ItemDraft) => Promise<void>; onDelete?: () => void }) {
   const [draft, setDraft] = useState<ItemDraft>(
-    item ? { name: item.name, description: item.description, priceCents: item.priceCents, category: item.category, photoUrl: item.photoUrl, status: item.status } : emptyDraft,
+    item ? { name: item.name, description: item.description, priceCents: item.priceCents, category: item.category, photoUrl: item.photoUrl, tags: item.tags, status: item.status } : emptyDraft,
   )
   const [price, setPrice] = useState(item ? (item.priceCents / 100).toFixed(2) : "")
+  const [newTag, setNewTag] = useState("")
   const [touched, setTouched] = useState(false)
   const [busy, setBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -56,6 +57,12 @@ function ItemFormBody({ onOpenChange, item, onSave, onDelete }: { onOpenChange: 
   const nameValid = draft.name.trim().length > 0
   const valid = priceValid && nameValid
   const priceCents = priceValid ? Math.round(parseFloat(price) * 100) : 0
+
+  function addTag(raw: string) {
+    const t = raw.trim()
+    if (t && !draft.tags.some((x) => x.toLowerCase() === t.toLowerCase())) setDraft((d) => ({ ...d, tags: [...d.tags, t] }))
+    setNewTag("")
+  }
 
   function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -117,6 +124,44 @@ function ItemFormBody({ onOpenChange, item, onSave, onDelete }: { onOpenChange: 
               </div>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="item-tag">Tags</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {draft.tags.map((t) => (
+                  <span key={t} className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-0.5 pr-1 pl-2.5 text-xs font-medium">
+                    {t}
+                    <button type="button" aria-label={`Remove ${t}`} className="flex size-4 items-center justify-center rounded-full hover:bg-slate-300" onClick={() => setDraft({ ...draft, tags: draft.tags.filter((x) => x !== t) })}>
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                ))}
+                {draft.tags.length === 0 && <span className="text-sm text-muted-foreground">No tags yet</span>}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  id="item-tag"
+                  placeholder="e.g. Vegetarian, Spicy"
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      addTag(newTag)
+                    }
+                  }}
+                />
+                <Button type="button" variant="outline" aria-label="Add tag" onClick={() => addTag(newTag)}>
+                  <Plus />
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {SUGGESTED_TAGS.filter((t) => !draft.tags.includes(t)).map((t) => (
+                  <button key={t} type="button" onClick={() => addTag(t)} className="rounded-full border border-dashed px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-slate-900 hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-slate-900/30 focus-visible:outline-none">
+                    + {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="item-photo">Photo</Label>
               <div className="flex items-center gap-3">
                 <Thumb url={draft.photoUrl} name={draft.name || "Item photo"} className="size-16 rounded-xl object-cover" />
@@ -156,6 +201,7 @@ function ItemFormBody({ onOpenChange, item, onSave, onDelete }: { onOpenChange: 
                   <p className="text-sm font-semibold">{draft.name || "Item name"}</p>
                   <p className="text-xs text-slate-500">{formatPrice(priceCents)}</p>
                   <p className="line-clamp-2 pt-1 text-xs text-slate-600">{draft.description || "Description appears here."}</p>
+                  {draft.tags.length > 0 && <p className="pt-1 text-[10px] text-slate-500">{draft.tags.slice(0, 3).join(" · ")}</p>}
                 </div>
                 <div className="border-t px-3 py-2 text-center text-xs font-semibold text-slate-900">Add to cart</div>
               </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronDown, LogOut, Settings, Sparkles, User } from "lucide-react"
+import { Check, ChevronDown, LogOut, Settings, Sparkles, User } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
@@ -68,13 +68,14 @@ export function TopNav() {
                   {item.label}
                 </Link>
                 <DropdownMenu>
-                  <DropdownMenuTrigger aria-label={`More in ${item.label}`} className={cn(pillBase, "flex items-center rounded-r-lg py-1.5 pr-2 pl-0.5")}>
+                  <DropdownMenuTrigger aria-label={`More in ${item.label}`} className={cn(pillBase, "my-1.5 flex items-center rounded-r-lg border-l border-current/20 py-0 pr-2 pl-1.5 aria-expanded:opacity-70")}>
                     <ChevronDown className="size-3.5" aria-hidden />
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="min-w-44 rounded-xl p-1.5">
+                  <DropdownMenuContent align="start" className="min-w-48">
                     {item.children.map((c) => (
-                      <DropdownMenuItem key={c.href} render={<Link href={c.href} />} className="rounded-lg">
+                      <DropdownMenuItem key={c.href} render={<Link href={c.href} />} className={cn(isWithin(pathname, c.href) && "bg-slate-100 font-semibold")}>
                         {c.label}
+                        {isWithin(pathname, c.href) && <Check className="ml-auto size-4" aria-hidden />}
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>
@@ -91,12 +92,12 @@ export function TopNav() {
           >
             <User className="size-4" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44 rounded-xl p-1.5">
-            <DropdownMenuItem render={<Link href="/settings" />} className="rounded-lg">
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem render={<Link href="/settings" />}>
               <Settings /> Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem render={<Link href="/login" />} className="rounded-lg">
+            <DropdownMenuItem render={<Link href="/login" />}>
               <LogOut /> Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
