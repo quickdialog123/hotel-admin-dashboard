@@ -123,10 +123,10 @@ export default function KnowledgeBasePage() {
           }
         />
       ) : (
-        <ul className="overflow-hidden rounded-3xl border bg-white">
+        <ul className="overflow-hidden rounded-2xl border bg-white">
           {data.map((s) => (
             <li key={s.id} className="flex items-center gap-4 border-b px-5 py-4 last:border-b-0">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
                 {s.type === "website" ? <Globe className="size-5" /> : s.type === "assistant" ? <Sparkles className="size-5" /> : <FileText className="size-5" />}
               </span>
               <div className="min-w-0 flex-1">

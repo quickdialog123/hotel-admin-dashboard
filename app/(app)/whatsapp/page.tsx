@@ -49,13 +49,13 @@ export default function WhatsAppPage() {
       {error ? (
         <ErrorState message={error} onRetry={reload} />
       ) : loading || !data ? (
-        <Skeleton className="h-64 rounded-3xl" />
+        <Skeleton className="h-64 rounded-2xl" />
       ) : (
         <div className="space-y-6">
-          <div className={`rounded-3xl border p-8 ${data.status === "error" ? "border-red-200 bg-red-50/50" : "bg-white"}`}>
+          <div className={`rounded-2xl border p-8 ${data.status === "error" ? "border-red-200 bg-red-50/50" : "bg-white"}`}>
             <div className="flex flex-wrap items-start justify-between gap-6">
               <div className="flex items-center gap-4">
-                <span className="flex size-14 items-center justify-center rounded-2xl bg-zinc-900 text-white">
+                <span className="flex size-14 items-center justify-center rounded-2xl bg-slate-900 text-white">
                   <MessageCircle className="size-7" aria-hidden />
                 </span>
                 <div>
@@ -116,7 +116,7 @@ export default function WhatsAppPage() {
           </div>
 
           {data.status === "connected" && (
-            <div className="flex items-center justify-between gap-4 rounded-3xl border border-dashed bg-white p-5 text-sm">
+            <div className="flex items-center justify-between gap-4 rounded-2xl border border-dashed bg-white p-5 text-sm">
               <div>
                 <p className="font-medium">Demo tools</p>
                 <p className="text-muted-foreground">Preview the error treatment staff would see if Meta rejects the connection.</p>

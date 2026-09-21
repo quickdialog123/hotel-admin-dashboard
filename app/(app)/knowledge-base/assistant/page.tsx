@@ -4,9 +4,9 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { ArrowLeft, ArrowUp, Check, Loader2 } from "lucide-react"
+import { ArrowLeft, ArrowUp, Loader2, Sparkles } from "lucide-react"
 import { PageHeader } from "@/components/app/page-header"
-import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
 import { createSourcesFromProfile } from "@/lib/api/knowledgeBase"
 import { cn } from "@/lib/utils"
 
@@ -15,14 +15,20 @@ import { cn } from "@/lib/utils"
 const SECTIONS = [
   {
     key: "basics",
+    hint: "Name, location & timings",
     title: "Property basics",
     questions: ["Hi! I'll help set up your receptionist's knowledge. What's the name of your hotel, and where is it?", "Great. What are your check-in and check-out times?"],
   },
-  { key: "amenities", title: "Amenities", questions: ["Do you offer room service, a spa, a pool or a gym? Tell me about what's available and the opening hours."] },
-  { key: "policies", title: "Policies", questions: ["What are your main policies — cancellation, pets, smoking, children, late checkout?"] },
-  { key: "local", title: "Local recommendations", questions: ["What would you recommend guests do nearby? Restaurants, sights, transport…"] },
-  { key: "contact", title: "Contact & escalation", questions: ["When should the receptionist hand a guest over to your team, and who should they contact (name, phone or email)?"] },
-  { key: "tone", title: "Tone of voice", questions: ["Last one: how should the receptionist sound? (e.g. warm and playful, polished and formal)"] },
+  { key: "amenities",
+    hint: "Room service, spa, pool", title: "Amenities", questions: ["Do you offer room service, a spa, a pool or a gym? Tell me about what's available and the opening hours."] },
+  { key: "policies",
+    hint: "Cancellation, pets, smoking", title: "Policies", questions: ["What are your main policies — cancellation, pets, smoking, children, late checkout?"] },
+  { key: "local",
+    hint: "Nearby places to visit", title: "Local recommendations", questions: ["What would you recommend guests do nearby? Restaurants, sights, transport…"] },
+  { key: "contact",
+    hint: "When to hand off to staff", title: "Contact & escalation", questions: ["When should the receptionist hand a guest over to your team, and who should they contact (name, phone or email)?"] },
+  { key: "tone",
+    hint: "How the receptionist sounds", title: "Tone of voice", questions: ["Last one: how should the receptionist sound? (e.g. warm and playful, polished and formal)"] },
 ]
 
 // Flatten into a question queue with the section each answer belongs to.
@@ -85,27 +91,44 @@ export default function AssistantPage() {
 
   return (
     <>
-      <Link href="/knowledge-base" className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-4" /> Knowledge Base
-      </Link>
-      <PageHeader title="AI Setup Assistant" description="Answer a few short questions and we'll draft your Knowledge Base for you." />
+      <PageHeader
+        title="AI Setup Assistant"
+        description="Describe your property and answer a few questions — I'll turn it into Knowledge Base entries."
+        actions={
+          <Link href="/knowledge-base" className={buttonVariants({ variant: "outline", className: "h-9 rounded-lg bg-white" })}>
+            <ArrowLeft /> Knowledge Base
+          </Link>
+        }
+      />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        <section aria-label="Chat" className="flex h-[600px] flex-col rounded-3xl border bg-white">
-          <div className="flex-1 space-y-3 overflow-y-auto p-5" aria-live="polite">
-            {bubbles.map((b, i) => (
-              <div key={i} className={cn("max-w-[80%] rounded-2xl px-4 py-2.5 text-sm", b.from === "ai" ? "rounded-bl-md bg-zinc-100" : "ml-auto rounded-br-md bg-zinc-900 text-white")}>
-                {b.text}
-              </div>
-            ))}
+      <div className="grid gap-4 lg:h-[calc(100vh-15rem)] lg:min-h-[520px] lg:grid-cols-[1fr_420px]">
+        <section aria-label="Chat" className="flex h-[560px] min-h-0 flex-col overflow-hidden rounded-2xl border bg-[#f1f4f9] lg:h-auto">
+          <div className="flex-1 space-y-4 overflow-y-auto p-6" aria-live="polite">
+            {bubbles.map((b, i) =>
+              b.from === "ai" ? (
+                <div key={i} className="flex max-w-[80%] items-start gap-3">
+                  <Avatar />
+                  <div className="rounded-2xl rounded-tl-md border bg-white px-4 py-2.5 text-[15px] shadow-sm">{b.text}</div>
+                </div>
+              ) : (
+                <div key={i} className="ml-auto w-fit max-w-[80%] rounded-2xl bg-slate-900 px-5 py-3 text-[15px] text-white">
+                  {b.text}
+                </div>
+              ),
+            )}
             {thinking && (
-              <div className="flex max-w-[80%] items-center gap-2 rounded-2xl rounded-bl-md bg-zinc-100 px-4 py-2.5 text-sm text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" /> Capturing your profile…
+              <div className="flex items-center gap-3" role="status" aria-label="Assistant is typing">
+                <Avatar />
+                <div className="flex items-center gap-1.5 rounded-full border bg-white px-4 py-3 shadow-sm">
+                  {[0, 1, 2].map((d) => (
+                    <span key={d} className="size-1.5 animate-pulse rounded-full bg-slate-400" style={{ animationDelay: `${d * 150}ms` }} />
+                  ))}
+                </div>
               </div>
             )}
             <div ref={endRef} />
           </div>
-          <form onSubmit={send} className="flex gap-2 border-t p-4">
+          <form onSubmit={send} className="flex gap-3 border-t bg-white p-4">
             <label htmlFor="assistant-input" className="sr-only">
               Your answer
             </label>
@@ -114,46 +137,58 @@ export default function AssistantPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={done || thinking}
-              placeholder={done ? "All done!" : "Type your answer…"}
-              className="h-11 flex-1 rounded-full border px-4 text-sm outline-none focus-visible:border-zinc-900 focus-visible:ring-3 focus-visible:ring-zinc-900/15 disabled:bg-zinc-50"
+              placeholder={done ? "All done!" : "Type your answer..."}
+              className="h-12 flex-1 rounded-xl border bg-[#f6f8fb] px-4 text-[15px] outline-none placeholder:text-slate-400 focus-visible:border-slate-900 focus-visible:ring-3 focus-visible:ring-indigo-500/20 disabled:opacity-60"
             />
-            <button type="submit" aria-label="Send" disabled={!input.trim() || thinking || done} className="flex size-11 items-center justify-center rounded-full bg-zinc-900 text-white transition-opacity disabled:opacity-40">
-              <ArrowUp className="size-4" />
+            <button type="submit" aria-label="Send" disabled={!input.trim() || thinking || done} className="flex size-12 items-center justify-center rounded-xl bg-slate-900 text-white transition-colors disabled:bg-slate-300">
+              <ArrowUp className="size-5" />
             </button>
           </form>
         </section>
 
-        <aside aria-label="Knowledge profile" className="h-fit rounded-3xl border bg-white p-5">
-          <div className="flex items-baseline justify-between">
-            <h2 className="font-semibold">Knowledge Profile</h2>
-            <span className="text-sm text-muted-foreground">
-              {capturedCount} of {SECTIONS.length} captured
-            </span>
+        <aside aria-label="Knowledge profile" className="flex min-h-0 flex-col overflow-hidden rounded-2xl border bg-white">
+          <div className="p-6 pb-5">
+            <p className="text-xs font-medium tracking-[0.12em] text-slate-500 uppercase">Knowledge profile so far</p>
+            <h2 className="mt-2 text-xl font-semibold">New property profile</h2>
+            <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuenow={capturedCount} aria-valuemin={0} aria-valuemax={SECTIONS.length} aria-label="Sections captured">
+              <div className="h-full rounded-full bg-slate-900 transition-all" style={{ width: `${(capturedCount / SECTIONS.length) * 100}%` }} />
+            </div>
+            <p className="mt-3 text-sm text-slate-500">
+              {capturedCount} of {SECTIONS.length} sections captured
+            </p>
           </div>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-100" role="progressbar" aria-valuenow={capturedCount} aria-valuemin={0} aria-valuemax={SECTIONS.length}>
-            <div className="h-full rounded-full bg-zinc-900 transition-all" style={{ width: `${(capturedCount / SECTIONS.length) * 100}%` }} />
-          </div>
-          <ul className="mt-5 space-y-2">
+          <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto border-t px-4 py-4">
             {SECTIONS.map((s) => {
               const captured = (answers[s.key]?.length ?? 0) >= s.questions.length
               const current = currentSection === s.key
               return (
-                <li key={s.key} className={cn("rounded-2xl border p-3 transition-colors", current && "border-zinc-900 bg-zinc-50")}>
-                  <div className="flex items-center gap-2.5">
-                    <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border", captured ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300")}>{captured && <Check className="size-3" />}</span>
-                    <span className={cn("text-sm", captured || current ? "font-medium" : "text-muted-foreground")}>{s.title}</span>
-                    {current && <span className="ml-auto text-xs text-muted-foreground">Answering…</span>}
+                <li key={s.key} className={cn("flex gap-3 rounded-xl px-3 py-3 transition-colors", current && "bg-slate-50")}>
+                  <span className={cn("mt-1 flex size-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px]", captured ? "border-slate-900 bg-slate-900" : current ? "border-slate-900" : "border-slate-300")}>
+                    {captured && <span className="size-1.5 rounded-full bg-white" />}
+                  </span>
+                  <div className="min-w-0">
+                    <p className={cn("text-[17px] leading-snug", captured || current ? "font-medium text-slate-900" : "text-slate-400")}>{s.title}</p>
+                    <p className={cn("mt-0.5 text-sm italic", captured || current ? "text-slate-500" : "text-slate-400")}>{captured && answers[s.key] ? answers[s.key].join(" · ") : s.hint}</p>
                   </div>
-                  {answers[s.key] && <p className="mt-2 line-clamp-2 pl-7 text-xs text-muted-foreground">{answers[s.key].join(" · ")}</p>}
                 </li>
               )
             })}
           </ul>
-          <Button className="mt-5 h-10 w-full rounded-xl" disabled={!done || thinking || saving} onClick={finish}>
-            {saving ? <Loader2 className="animate-spin" /> : null} Create draft entries
-          </Button>
+          <div className="border-t p-4">
+            <button type="button" disabled={!done || thinking || saving} onClick={finish} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 text-sm font-medium text-white transition-colors disabled:bg-slate-300">
+              {saving && <Loader2 className="size-4 animate-spin" />} Create draft entries
+            </button>
+          </div>
         </aside>
       </div>
     </>
+  )
+}
+
+function Avatar() {
+  return (
+    <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white" aria-hidden>
+      <Sparkles className="size-[18px]" />
+    </span>
   )
 }

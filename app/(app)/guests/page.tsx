@@ -79,7 +79,7 @@ export default function GuestsPage() {
 
   const th = (k: SortKey, label: string) => (
     <th key={k} scope="col" aria-sort={sortBy === k ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="px-4 py-3 text-left font-medium">
-      <button type="button" onClick={() => sort(k)} className="inline-flex items-center gap-1 rounded outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-zinc-900/30">
+      <button type="button" onClick={() => sort(k)} className="inline-flex items-center gap-1 rounded outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-slate-900/30">
         {label}
         {sortBy === k ? sortDir === "asc" ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" /> : <ChevronsUpDown className="size-3.5 opacity-50" />}
       </button>
@@ -93,7 +93,7 @@ export default function GuestsPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative w-full max-w-sm min-w-56 flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <input type="search" aria-label="Search guests" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, room number, phone..." className="h-10 w-full rounded-full border bg-white pr-4 pl-11 text-sm outline-none focus-visible:border-zinc-900 focus-visible:ring-3 focus-visible:ring-zinc-900/15" />
+          <input type="search" aria-label="Search guests" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, room number, phone..." className="h-10 w-full rounded-full border bg-white pr-4 pl-11 text-sm outline-none focus-visible:border-slate-900 focus-visible:ring-3 focus-visible:ring-slate-900/15" />
         </div>
         <Button className="h-10 rounded-full px-5" onClick={() => setAddOpen(true)}>
           <Plus /> Add Guest
@@ -110,7 +110,7 @@ export default function GuestsPage() {
       ) : neverAnyone ? (
         <EmptyState icon={<Users className="size-5" />} title="No guests yet" description="Guests appear here after they first message your AI receptionist on WhatsApp." />
       ) : !data ? (
-        <div className="space-y-2 rounded-3xl border bg-white p-4" aria-busy="true" aria-label="Loading">
+        <div className="space-y-2 rounded-2xl border bg-white p-4" aria-busy="true" aria-label="Loading">
           {Array.from({ length: 8 }, (_, i) => (
             <Skeleton key={i} className="h-11 w-full" />
           ))}
@@ -119,7 +119,7 @@ export default function GuestsPage() {
         <EmptyState icon={<Search className="size-5" />} title="No guests match your search" description={`Nothing found for "${debounced}".`} action={<Button variant="outline" onClick={() => setSearch("")}>Clear search</Button>} />
       ) : (
         <>
-          <div className={cn("overflow-x-auto rounded-3xl border bg-white transition-opacity", loading && "opacity-60")}>
+          <div className={cn("overflow-x-auto rounded-2xl border bg-white transition-opacity", loading && "opacity-60")}>
             <table className="w-full min-w-[960px] text-sm">
               <thead className="border-b text-xs text-muted-foreground">
                 <tr>
@@ -136,7 +136,7 @@ export default function GuestsPage() {
               </thead>
               <tbody>
                 {data.items.map((g) => (
-                  <tr key={g.id} className="border-b last:border-b-0 hover:bg-zinc-50">
+                  <tr key={g.id} className="border-b last:border-b-0 hover:bg-slate-50">
                     <td className="px-4 py-3"><Avatar name={g.name} /></td>
                     <td className="px-4 py-3 font-medium">
                       <Link href={`/guests/${g.id}`} className="hover:underline focus-visible:underline focus-visible:outline-none">{g.name}</Link>
@@ -154,7 +154,7 @@ export default function GuestsPage() {
                     <td className="px-4 py-3">{g.loyaltyTier ? <StatusPill tone="outline">{g.loyaltyTier}</StatusPill> : <span className="text-muted-foreground">—</span>}</td>
                     <td className="px-4 py-3">
                       <DropdownMenu>
-                        <DropdownMenuTrigger aria-label={`Actions for ${g.name}`} className="flex size-8 items-center justify-center rounded-full outline-none hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-zinc-900/30 aria-expanded:bg-zinc-100">
+                        <DropdownMenuTrigger aria-label={`Actions for ${g.name}`} className="flex size-8 items-center justify-center rounded-full outline-none hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-slate-900/30 aria-expanded:bg-slate-100">
                           <MoreHorizontal className="size-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56 rounded-2xl p-1.5">
@@ -182,7 +182,7 @@ export default function GuestsPage() {
                 p === "…" ? (
                   <span key={`e${i}`} className="px-2">…</span>
                 ) : (
-                  <button key={p} type="button" aria-current={p === page ? "page" : undefined} onClick={() => setPage(p)} className={cn("size-8 rounded-full text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/30", p === page ? "bg-zinc-900 text-white" : "hover:bg-zinc-100")}>
+                  <button key={p} type="button" aria-current={p === page ? "page" : undefined} onClick={() => setPage(p)} className={cn("size-8 rounded-full text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30", p === page ? "bg-slate-900 text-white" : "hover:bg-slate-100")}>
                     {p}
                   </button>
                 ),

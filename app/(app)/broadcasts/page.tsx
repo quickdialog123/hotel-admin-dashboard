@@ -43,7 +43,7 @@ function BroadcastsInner() {
       />
       <div role="tablist" aria-label="Broadcasts sections" className="mb-5 inline-flex rounded-full border bg-white p-1">
         {[["history", "History"], ["templates", "Message templates"]].map(([k, label]) => (
-          <button key={k} role="tab" type="button" aria-selected={tab === k} onClick={() => setTab(k)} className={cn("rounded-full px-4 py-1.5 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/30", tab === k ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900")}>
+          <button key={k} role="tab" type="button" aria-selected={tab === k} onClick={() => setTab(k)} className={cn("rounded-full px-4 py-1.5 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30", tab === k ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900")}>
             {label}
           </button>
         ))}
@@ -101,7 +101,7 @@ function Templates() {
 
   return (
     <>
-      <ul className="overflow-hidden rounded-3xl border bg-white">
+      <ul className="overflow-hidden rounded-2xl border bg-white">
         {data.map((t) => (
           <li key={t.id} className="flex items-center gap-4 border-b px-5 py-4 last:border-b-0">
             <div className="min-w-0 flex-1">

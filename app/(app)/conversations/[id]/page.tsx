@@ -16,9 +16,9 @@ import { cn } from "@/lib/utils"
 
 const senderLabel: Record<MessageSender, string> = { guest: "Guest", ai: "AI receptionist", staff: "Staff" }
 const bubble: Record<MessageSender, string> = {
-  guest: "mr-auto rounded-bl-md bg-zinc-100",
+  guest: "mr-auto rounded-bl-md bg-slate-100",
   ai: "ml-auto rounded-br-md border bg-white",
-  staff: "ml-auto rounded-br-md bg-zinc-900 text-white",
+  staff: "ml-auto rounded-br-md bg-slate-900 text-white",
 }
 
 export default function ConversationDetailPage() {
@@ -38,8 +38,8 @@ export default function ConversationDetailPage() {
     </Link>
   )
   if (error) return <>{back}<ErrorState message={error} onRetry={reload} /></>
-  if (loading && !data) return <>{back}<Skeleton className="h-[560px] rounded-3xl" /></>
-  if (!data) return <>{back}<p className="rounded-3xl border bg-white p-10 text-center font-medium">Conversation not found</p></>
+  if (loading && !data) return <>{back}<Skeleton className="h-[560px] rounded-2xl" /></>
+  if (!data) return <>{back}<p className="rounded-2xl border bg-white p-10 text-center font-medium">Conversation not found</p></>
 
   const staff = data.status === "staff_handling"
 
@@ -74,7 +74,7 @@ export default function ConversationDetailPage() {
   return (
     <>
       {back}
-      <div className="flex h-[calc(100vh-11rem)] min-h-[480px] flex-col rounded-3xl border bg-white">
+      <div className="flex h-[calc(100vh-11rem)] min-h-[480px] flex-col rounded-2xl border bg-white">
         <div className="flex flex-wrap items-center gap-3 border-b px-5 py-4">
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-semibold">{data.guestLabel}</h1>
@@ -108,8 +108,8 @@ export default function ConversationDetailPage() {
         {staff ? (
           <form onSubmit={send} className="flex gap-2 border-t p-4">
             <label htmlFor="reply" className="sr-only">Reply to guest</label>
-            <input id="reply" value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a reply as staff…" className="h-11 flex-1 rounded-full border px-4 text-sm outline-none focus-visible:border-zinc-900 focus-visible:ring-3 focus-visible:ring-zinc-900/15" />
-            <button type="submit" aria-label="Send reply" disabled={!text.trim()} className="flex size-11 items-center justify-center rounded-xl bg-zinc-900 text-white disabled:opacity-40"><Send className="size-4" /></button>
+            <input id="reply" value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a reply as staff…" className="h-11 flex-1 rounded-full border px-4 text-sm outline-none focus-visible:border-slate-900 focus-visible:ring-3 focus-visible:ring-slate-900/15" />
+            <button type="submit" aria-label="Send reply" disabled={!text.trim()} className="flex size-11 items-center justify-center rounded-xl bg-slate-900 text-white disabled:opacity-40"><Send className="size-4" /></button>
           </form>
         ) : (
           <p className="border-t px-5 py-4 text-center text-sm text-muted-foreground">

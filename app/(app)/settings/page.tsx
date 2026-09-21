@@ -47,7 +47,7 @@ export default function SettingsPage() {
       <div className="grid gap-6 md:grid-cols-[200px_1fr]">
         <nav aria-label="Settings sections" className="flex gap-1 overflow-x-auto md:flex-col">
           {TABS.map((t) => (
-            <button key={t.key} type="button" aria-current={tab === t.key ? "page" : undefined} onClick={() => setTab(t.key)} className={cn("flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/30", tab === t.key ? "bg-zinc-900 text-white" : "text-zinc-600 hover:bg-zinc-100")}>
+            <button key={t.key} type="button" aria-current={tab === t.key ? "page" : undefined} onClick={() => setTab(t.key)} className={cn("flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30", tab === t.key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100")}>
               <t.icon className="size-4" /> {t.label}
             </button>
           ))}
@@ -72,7 +72,7 @@ function ProfileTab() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   if (error) return <ErrorState message={error} onRetry={reload} />
-  if (!form) return <Skeleton className="h-96 rounded-3xl" />
+  if (!form) return <Skeleton className="h-96 rounded-2xl" />
 
   function onLogo(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -100,14 +100,14 @@ function ProfileTab() {
   }
 
   return (
-    <form onSubmit={save} className="space-y-5 rounded-3xl border bg-white p-6">
+    <form onSubmit={save} className="space-y-5 rounded-2xl border bg-white p-6">
       <h2 className="font-semibold">Hotel profile</h2>
       <div className="flex items-center gap-4">
         {form.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={form.logoUrl} alt="Hotel logo" className="size-16 rounded-2xl border object-cover" />
         ) : (
-          <div className="flex size-16 items-center justify-center rounded-2xl bg-zinc-100 text-xl font-bold text-zinc-500" aria-hidden>{form.name[0] ?? "H"}</div>
+          <div className="flex size-16 items-center justify-center rounded-2xl bg-slate-100 text-xl font-bold text-slate-500" aria-hidden>{form.name[0] ?? "H"}</div>
         )}
         <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}><ImagePlus /> {form.logoUrl ? "Replace logo" : "Upload logo"}</Button>
         <input ref={fileRef} type="file" accept="image/*" aria-label="Upload logo" className="sr-only" onChange={onLogo} />
@@ -157,7 +157,7 @@ function StaffTab() {
   }
 
   return (
-    <div className="rounded-3xl border bg-white">
+    <div className="rounded-2xl border bg-white">
       <div className="flex items-center justify-between border-b p-5">
         <h2 className="font-semibold">Staff users</h2>
         <Button className="rounded-xl" onClick={() => setOpen(true)}><Plus /> Add user</Button>
@@ -240,9 +240,9 @@ const PREF_LABELS: { key: keyof NotificationPreferences; title: string; desc: st
 function NotificationsTab() {
   const { data, error, reload, setData } = useAsync(getNotificationPreferences)
   if (error) return <ErrorState message={error} onRetry={reload} />
-  if (!data) return <Skeleton className="h-96 rounded-3xl" />
+  if (!data) return <Skeleton className="h-96 rounded-2xl" />
   return (
-    <div className="rounded-3xl border bg-white">
+    <div className="rounded-2xl border bg-white">
       <h2 className="border-b p-5 font-semibold">Notification preferences</h2>
       <ul>
         {PREF_LABELS.map((p) => (

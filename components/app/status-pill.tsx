@@ -3,10 +3,10 @@ import { cn } from "@/lib/utils"
 export type PillTone = "neutral" | "outline" | "progress" | "solid" | "warning" | "error"
 
 const tones: Record<PillTone, string> = {
-  neutral: "bg-zinc-100 text-zinc-700",
-  outline: "border border-zinc-300 bg-white text-zinc-700",
+  neutral: "bg-slate-100 text-slate-700",
+  outline: "border border-slate-300 bg-white text-slate-700",
   progress: "bg-indigo-50 text-indigo-700",
-  solid: "bg-zinc-900 text-white",
+  solid: "bg-slate-900 text-white",
   warning: "bg-amber-50 text-amber-800",
   error: "bg-red-50 text-red-700",
 }

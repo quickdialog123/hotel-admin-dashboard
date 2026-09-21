@@ -72,7 +72,7 @@ export function ReceptionistWizard({ existing, onDone, onCancel }: { existing: R
       <div className="grid gap-8 lg:grid-cols-[200px_1fr_320px]">
         <Stepper steps={STEPS} current={step} onStepClick={setStep} />
 
-        <div className="rounded-3xl border bg-white p-6">
+        <div className="rounded-2xl border bg-white p-6">
           {step === 0 && (
             <div className="space-y-5">
               <div className="space-y-2">
@@ -104,7 +104,7 @@ export function ReceptionistWizard({ existing, onDone, onCancel }: { existing: R
               <Textarea id="r-prompt" rows={10} value={prompt} onChange={(e) => setPrompt(e.target.value)} aria-invalid={touched && !promptOk} />
               {touched && !promptOk && <p className="text-sm text-destructive">The prompt can&apos;t be empty.</p>}
               <p className="text-xs text-muted-foreground">
-                Use <code className="rounded bg-zinc-100 px-1">{"{{hotel_name}}"}</code> to insert your hotel&apos;s name.
+                Use <code className="rounded bg-slate-100 px-1">{"{{hotel_name}}"}</code> to insert your hotel&apos;s name.
               </p>
             </div>
           )}
@@ -146,7 +146,7 @@ export function ReceptionistWizard({ existing, onDone, onCancel }: { existing: R
           <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">Live preview</p>
           <PhoneFrame title={name.trim() || "Receptionist"} subtitle={HOTEL_NAME}>
             <WaBubble>{greeting}</WaBubble>
-            {step === 1 && <WaBubble className="text-zinc-500 italic">Behaviour: {renderedPrompt.slice(0, 140)}{renderedPrompt.length > 140 ? "…" : ""}</WaBubble>}
+            {step === 1 && <WaBubble className="text-slate-500 italic">Behaviour: {renderedPrompt.slice(0, 140)}{renderedPrompt.length > 140 ? "…" : ""}</WaBubble>}
           </PhoneFrame>
         </aside>
       </div>

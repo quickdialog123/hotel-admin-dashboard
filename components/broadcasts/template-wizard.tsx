@@ -99,7 +99,7 @@ export function TemplateWizard() {
     <div className="grid gap-8 lg:grid-cols-[200px_1fr_320px]">
       <Stepper steps={STEPS} current={step} onStepClick={setStep} />
 
-      <div className="rounded-3xl border bg-white p-6">
+      <div className="rounded-2xl border bg-white p-6">
         {step === 0 && (
           <div className="space-y-5">
             <div className="space-y-2">
@@ -146,11 +146,11 @@ export function TemplateWizard() {
             <Label htmlFor="t-body">Message body</Label>
             <Textarea id="t-body" rows={8} maxLength={1024} placeholder="Hi {{firstname}}, …" value={body} onChange={(e) => setBody(e.target.value)} aria-invalid={touched && !bodyOk} />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span className={touched && !bodyOk ? "text-sm text-destructive" : ""}>{touched && !bodyOk ? "Body is required." : <>Use <code className="rounded bg-zinc-100 px-1">{"{{variable}}"}</code> for personalisation.</>}</span>
+              <span className={touched && !bodyOk ? "text-sm text-destructive" : ""}>{touched && !bodyOk ? "Body is required." : <>Use <code className="rounded bg-slate-100 px-1">{"{{variable}}"}</code> for personalisation.</>}</span>
               <span>{body.length}/1024</span>
             </div>
             {vars.length > 0 && <div className="flex flex-wrap gap-1.5 pt-1">{vars.map((v) => <StatusPill key={v}>{`{{${v}}}`}</StatusPill>)}</div>}
-            {category === "MARKETING" && <p className="rounded-xl bg-zinc-50 p-3 text-xs text-muted-foreground">Marketing templates automatically end with &ldquo;{MARKETING_OPT_OUT_LINE}&rdquo;. This line is required for compliance and can&apos;t be edited.</p>}
+            {category === "MARKETING" && <p className="rounded-xl bg-slate-50 p-3 text-xs text-muted-foreground">Marketing templates automatically end with &ldquo;{MARKETING_OPT_OUT_LINE}&rdquo;. This line is required for compliance and can&apos;t be edited.</p>}
           </div>
         )}
 

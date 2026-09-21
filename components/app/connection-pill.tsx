@@ -3,8 +3,8 @@ import { cn } from "@/lib/utils"
 import type { WabaConnectionStatus } from "@/lib/api/waba"
 
 const config = {
-  connected: { label: "Connected", icon: CheckCircle2, cls: "bg-zinc-900 text-white" },
-  not_connected: { label: "Not connected", icon: CircleDashed, cls: "border-2 border-zinc-300 bg-white text-zinc-700" },
+  connected: { label: "Connected", icon: CheckCircle2, cls: "bg-slate-900 text-white" },
+  not_connected: { label: "Not connected", icon: CircleDashed, cls: "border-2 border-slate-300 bg-white text-slate-700" },
   error: { label: "Connection error", icon: AlertTriangle, cls: "bg-red-50 text-red-700 border border-red-200" },
 } as const
 

@@ -26,7 +26,7 @@ export function Thumb({ url, name, className }: { url: string | null; name: stri
     // eslint-disable-next-line @next/next/no-img-element
     <img src={url} alt={name} className={className} />
   ) : (
-    <div className={`flex items-center justify-center bg-zinc-100 text-zinc-400 ${className ?? ""}`} aria-hidden>
+    <div className={`flex items-center justify-center bg-slate-100 text-slate-400 ${className ?? ""}`} aria-hidden>
       <ShoppingBag className="size-8" />
     </div>
   )
@@ -154,10 +154,10 @@ function ItemFormBody({ onOpenChange, item, onSave, onDelete }: { onOpenChange: 
                 <Thumb url={draft.photoUrl} name="" className="aspect-square w-full object-cover" />
                 <div className="space-y-0.5 p-3">
                   <p className="text-sm font-semibold">{draft.name || "Item name"}</p>
-                  <p className="text-xs text-zinc-500">{formatPrice(priceCents)}</p>
-                  <p className="line-clamp-2 pt-1 text-xs text-zinc-600">{draft.description || "Description appears here."}</p>
+                  <p className="text-xs text-slate-500">{formatPrice(priceCents)}</p>
+                  <p className="line-clamp-2 pt-1 text-xs text-slate-600">{draft.description || "Description appears here."}</p>
                 </div>
-                <div className="border-t px-3 py-2 text-center text-xs font-semibold text-zinc-900">Add to cart</div>
+                <div className="border-t px-3 py-2 text-center text-xs font-semibold text-slate-900">Add to cart</div>
               </div>
             </PhoneFrame>
           </div>

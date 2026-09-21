@@ -27,7 +27,7 @@ export function PillSelect<T extends string>({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={label}
-        className={cn("inline-flex h-9 items-center gap-2 rounded-full border bg-white px-4 text-sm font-medium transition-colors outline-none hover:bg-zinc-50 focus-visible:border-zinc-900 focus-visible:ring-3 focus-visible:ring-zinc-900/15 aria-expanded:bg-zinc-50", className)}
+        className={cn("inline-flex h-9 items-center gap-2 rounded-full border bg-white px-4 text-sm font-medium transition-colors outline-none hover:bg-slate-50 focus-visible:border-slate-900 focus-visible:ring-3 focus-visible:ring-slate-900/15 aria-expanded:bg-slate-50", className)}
       >
         {prefix}
         {current?.label}

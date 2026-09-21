@@ -10,7 +10,7 @@ export function Stepper({ steps, current, onStepClick }: { steps: string[]; curr
         const active = i === current
         return (
           <li key={label} className="relative flex gap-3 pb-7 last:pb-0" aria-current={active ? "step" : undefined}>
-            {i < steps.length - 1 && <span className={cn("absolute top-8 left-4 -ml-px h-[calc(100%-2rem)] w-0.5", done ? "bg-zinc-900" : "bg-zinc-200")} aria-hidden />}
+            {i < steps.length - 1 && <span className={cn("absolute top-8 left-4 -ml-px h-[calc(100%-2rem)] w-0.5", done ? "bg-slate-900" : "bg-slate-200")} aria-hidden />}
             <button
               type="button"
               disabled={!done || !onStepClick}
@@ -20,9 +20,9 @@ export function Stepper({ steps, current, onStepClick }: { steps: string[]; curr
               <span
                 className={cn(
                   "flex size-8 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold",
-                  done && "border-zinc-900 bg-zinc-900 text-white",
-                  active && "border-zinc-900 bg-white text-zinc-900",
-                  !done && !active && "border-zinc-200 bg-white text-zinc-400",
+                  done && "border-slate-900 bg-slate-900 text-white",
+                  active && "border-slate-900 bg-white text-slate-900",
+                  !done && !active && "border-slate-200 bg-white text-slate-400",
                 )}
               >
                 {done ? <Check className="size-4" /> : i + 1}

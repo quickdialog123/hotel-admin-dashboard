@@ -31,11 +31,11 @@ export default function DashboardPage() {
         {conn.error ? (
           <ErrorState message={conn.error} onRetry={conn.reload} />
         ) : conn.loading || !conn.data ? (
-          <Skeleton className="h-28 rounded-3xl" />
+          <Skeleton className="h-28 rounded-2xl" />
         ) : (
           <Link
             href="/whatsapp"
-            className={`flex flex-wrap items-center justify-between gap-4 rounded-3xl border p-6 transition-colors hover:border-zinc-400 ${conn.data.status === "error" ? "border-red-200 bg-red-50/50" : "bg-white"}`}
+            className={`flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-6 transition-colors hover:border-slate-400 ${conn.data.status === "error" ? "border-red-200 bg-red-50/50" : "bg-white"}`}
           >
             <div>
               <h2 id="conn-heading" className="text-sm font-medium text-muted-foreground">
@@ -69,7 +69,7 @@ export default function DashboardPage() {
               { label: "Active guests", value: stats.data?.activeGuests, icon: Users },
               { label: "Orders today", value: stats.data?.ordersToday, icon: ShoppingBag },
             ].map((s) => (
-              <div key={s.label} className="rounded-3xl border bg-white p-5">
+              <div key={s.label} className="rounded-2xl border bg-white p-5">
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span className="text-sm">{s.label}</span>
                   <s.icon className="size-4" aria-hidden />
@@ -84,8 +84,8 @@ export default function DashboardPage() {
       <h2 className="mb-3 text-sm font-medium text-muted-foreground">Quick links</h2>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {quickLinks.map((l) => (
-          <Link key={l.href} href={l.href} className="group flex items-center gap-4 rounded-3xl border bg-white p-5 transition-colors hover:border-zinc-400">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-zinc-100 text-zinc-700 transition-colors group-hover:bg-zinc-900 group-hover:text-white">
+          <Link key={l.href} href={l.href} className="group flex items-center gap-4 rounded-2xl border bg-white p-5 transition-colors hover:border-slate-400">
+            <span className="flex size-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700 transition-colors group-hover:bg-slate-900 group-hover:text-white">
               <l.icon className="size-5" aria-hidden />
             </span>
             <span className="min-w-0 flex-1">

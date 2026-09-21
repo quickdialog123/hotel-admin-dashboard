@@ -41,7 +41,7 @@ export default function NewBroadcastPage() {
   )
 
   if (error) return <>{back}<ErrorState message={error} onRetry={() => { templates.reload(); segments.reload() }} /></>
-  if (!templates.data || !segments.data) return <>{back}<Skeleton className="h-96 rounded-3xl" /></>
+  if (!templates.data || !segments.data) return <>{back}<Skeleton className="h-96 rounded-2xl" /></>
   if (approved.length === 0)
     return <>{back}<EmptyState title="No approved templates" description="You need at least one template approved by Meta before you can send a broadcast." action={<Link href="/broadcasts/templates/new" className={buttonVariants({ className: "rounded-xl" })}>Create a template</Link>} /></>
 
@@ -57,7 +57,7 @@ export default function NewBroadcastPage() {
             <p>Broadcasts sent outside a guest&apos;s 24-hour conversation window require an approved message template and marketing opt-in — that&apos;s why only Approved templates are selectable here.</p>
           </div>
 
-          <section className="space-y-3 rounded-3xl border bg-white p-6">
+          <section className="space-y-3 rounded-2xl border bg-white p-6">
             <h2 className="font-semibold">1. Template</h2>
             <div>
               <PillSelect label="Template" value={templateId} onChange={(v) => { setTemplateId(v); setValues({}) }} options={[...(templateId ? [] : [{ value: "", label: "Choose an approved template…" }]), ...approved.map((t) => ({ value: t.id, label: t.name }))]} />
@@ -65,7 +65,7 @@ export default function NewBroadcastPage() {
           </section>
 
           {template && vars.length > 0 && (
-            <section className="space-y-4 rounded-3xl border bg-white p-6">
+            <section className="space-y-4 rounded-2xl border bg-white p-6">
               <h2 className="font-semibold">2. Fill in variables</h2>
               {vars.map((v) => (
                 <div key={v} className="space-y-2">
@@ -77,12 +77,12 @@ export default function NewBroadcastPage() {
             </section>
           )}
 
-          <section className="space-y-3 rounded-3xl border bg-white p-6">
+          <section className="space-y-3 rounded-2xl border bg-white p-6">
             <h2 className="font-semibold">{vars.length > 0 ? "3" : "2"}. Recipients</h2>
             <ul className="space-y-2" role="radiogroup" aria-label="Recipient segment">
               {segments.data.map((s) => (
                 <li key={s.id}>
-                  <button type="button" role="radio" aria-checked={segmentId === s.id} onClick={() => setSegmentId(s.id)} className={`flex w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-zinc-900/20 ${segmentId === s.id ? "border-zinc-900 bg-zinc-50" : "hover:bg-zinc-50"}`}>
+                  <button type="button" role="radio" aria-checked={segmentId === s.id} onClick={() => setSegmentId(s.id)} className={`flex w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-slate-900/20 ${segmentId === s.id ? "border-slate-900 bg-slate-50" : "hover:bg-slate-50"}`}>
                     <span>
                       <span className="block font-medium">{s.name}</span>
                       <span className="block text-sm text-muted-foreground">{s.description}</span>
@@ -111,7 +111,7 @@ export default function NewBroadcastPage() {
 
         <aside aria-label="Preview" className="lg:sticky lg:top-24 lg:self-start">
           <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">Preview</p>
-          {template ? <TemplatePreview category={template.category} header={template.header} body={template.body} footer={template.footer} buttons={template.buttons} values={values} /> : <div className="rounded-3xl border border-dashed p-10 text-center text-sm text-muted-foreground">Choose a template to see a preview.</div>}
+          {template ? <TemplatePreview category={template.category} header={template.header} body={template.body} footer={template.footer} buttons={template.buttons} values={values} /> : <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">Choose a template to see a preview.</div>}
         </aside>
       </div>
 

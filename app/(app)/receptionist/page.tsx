@@ -48,15 +48,15 @@ export default function ReceptionistPage() {
       {error ? (
         <ErrorState message={error} onRetry={reload} />
       ) : loading && !data ? (
-        <Skeleton className="h-40 rounded-3xl" />
+        <Skeleton className="h-40 rounded-2xl" />
       ) : !hasOne ? (
-        <button type="button" onClick={() => setWizard({ existing: null })} className="flex w-full flex-col items-center justify-center gap-2 rounded-3xl border-2 border-dashed bg-white py-16 text-muted-foreground transition-colors outline-none hover:border-zinc-900 hover:text-zinc-900 focus-visible:border-zinc-900 focus-visible:ring-3 focus-visible:ring-zinc-900/20">
+        <button type="button" onClick={() => setWizard({ existing: null })} className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed bg-white py-16 text-muted-foreground transition-colors outline-none hover:border-slate-900 hover:text-slate-900 focus-visible:border-slate-900 focus-visible:ring-3 focus-visible:ring-slate-900/20">
           <Plus className="size-6" />
           <span className="font-medium">Add AI Receptionist</span>
           <span className="text-sm">Set a name, tone and knowledge in three quick steps</span>
         </button>
       ) : (
-        <div className="overflow-x-auto rounded-3xl border bg-white">
+        <div className="overflow-x-auto rounded-2xl border bg-white">
           <table className="w-full min-w-[820px] text-sm">
             <thead className="border-b text-xs text-muted-foreground">
               <tr>
@@ -68,7 +68,7 @@ export default function ReceptionistPage() {
             </thead>
             <tbody>
               {data!.map((r) => (
-                <tr key={r.id} className="border-b last:border-b-0 hover:bg-zinc-50">
+                <tr key={r.id} className="border-b last:border-b-0 hover:bg-slate-50">
                   <td className="px-4 py-4 font-medium">
                     {r.name}
                     {r.description && <p className="text-xs font-normal text-muted-foreground">{r.description}</p>}
@@ -94,7 +94,7 @@ export default function ReceptionistPage() {
                   </td>
                   <td className="px-4 py-4">
                     <DropdownMenu>
-                      <DropdownMenuTrigger aria-label={`Actions for ${r.name}`} className="flex size-8 items-center justify-center rounded-full outline-none hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-zinc-900/30">
+                      <DropdownMenuTrigger aria-label={`Actions for ${r.name}`} className="flex size-8 items-center justify-center rounded-full outline-none hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-slate-900/30">
                         <MoreHorizontal className="size-4" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-40 rounded-2xl p-1.5">

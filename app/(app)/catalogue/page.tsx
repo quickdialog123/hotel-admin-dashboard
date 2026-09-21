@@ -88,7 +88,7 @@ export default function CataloguePage() {
         toggle(item.id)
       }}
       className={cn(
-        "absolute top-2.5 right-2.5 flex size-7 items-center justify-center rounded-full border-2 border-white bg-zinc-900 text-white shadow transition-opacity outline-none focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-zinc-900/40",
+        "absolute top-2.5 right-2.5 flex size-7 items-center justify-center rounded-full border-2 border-white bg-slate-900 text-white shadow transition-opacity outline-none focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-slate-900/40",
         selected.has(item.id) ? "opacity-100" : "opacity-0 group-hover:opacity-100",
       )}
     >
@@ -106,7 +106,7 @@ export default function CataloguePage() {
         <PillSelect<Sort> label="Sort" prefix="Sort: " value={sort} onChange={setSort} options={[{ value: "updated", label: "Last updated" }, { value: "name", label: "Name" }, { value: "price", label: "Price" }]} />
         <div className="ml-auto flex rounded-full border bg-white p-0.5" role="group" aria-label="View">
           {(["grid", "list"] as const).map((v) => (
-            <button key={v} type="button" aria-pressed={view === v} aria-label={`${v} view`} onClick={() => setView(v)} className={cn("flex size-8 items-center justify-center rounded-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/30", view === v ? "bg-zinc-900 text-white" : "text-zinc-500 hover:text-zinc-900")}>
+            <button key={v} type="button" aria-pressed={view === v} aria-label={`${v} view`} onClick={() => setView(v)} className={cn("flex size-8 items-center justify-center rounded-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30", view === v ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900")}>
               {v === "grid" ? <LayoutGrid className="size-4" /> : <List className="size-4" />}
             </button>
           ))}
@@ -114,7 +114,7 @@ export default function CataloguePage() {
       </div>
 
       {selecting && (
-        <div role="region" aria-label="Bulk actions" className="sticky top-20 z-30 mb-4 flex flex-wrap items-center gap-2 rounded-2xl bg-zinc-900 px-4 py-2.5 text-white shadow-lg">
+        <div role="region" aria-label="Bulk actions" className="sticky top-20 z-30 mb-4 flex flex-wrap items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-white shadow-lg">
           <span className="text-sm font-medium">{selected.size} selected</span>
           <div className="ml-auto flex items-center gap-2">
             <DropdownMenu>
@@ -156,8 +156,8 @@ export default function CataloguePage() {
         <div className="grid grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-4">
           {items.map((item) => (
             <div key={item.id} className="group relative">
-              <button type="button" onClick={() => (selecting ? toggle(item.id) : openEdit(item))} className="block w-full rounded-2xl text-left outline-none focus-visible:ring-3 focus-visible:ring-zinc-900/30">
-                <div className={cn("relative overflow-hidden rounded-2xl border bg-zinc-100", selected.has(item.id) && "ring-2 ring-zinc-900")}>
+              <button type="button" onClick={() => (selecting ? toggle(item.id) : openEdit(item))} className="block w-full rounded-2xl text-left outline-none focus-visible:ring-3 focus-visible:ring-slate-900/30">
+                <div className={cn("relative overflow-hidden rounded-2xl border bg-slate-100", selected.has(item.id) && "ring-2 ring-slate-900")}>
                   <Thumb url={item.photoUrl} name={item.name} className="aspect-square w-full object-cover" />
                   <div className="absolute bottom-2.5 left-2.5">
                     <StatusBadge status={item.status} />
@@ -171,17 +171,17 @@ export default function CataloguePage() {
               {select(item)}
             </div>
           ))}
-          <button type="button" onClick={openAdd} className="flex aspect-square flex-col items-center justify-center gap-2 self-start rounded-2xl border-2 border-dashed bg-white text-muted-foreground transition-colors outline-none hover:border-zinc-900 hover:text-zinc-900 focus-visible:border-zinc-900 focus-visible:ring-3 focus-visible:ring-zinc-900/20">
+          <button type="button" onClick={openAdd} className="flex aspect-square flex-col items-center justify-center gap-2 self-start rounded-2xl border-2 border-dashed bg-white text-muted-foreground transition-colors outline-none hover:border-slate-900 hover:text-slate-900 focus-visible:border-slate-900 focus-visible:ring-3 focus-visible:ring-slate-900/20">
             <Plus className="size-6" />
             <span className="text-sm font-medium">Add item</span>
           </button>
           {items.length === 0 && <p className="col-span-full text-sm text-muted-foreground">No items match these filters.</p>}
         </div>
       ) : (
-        <ul className="overflow-hidden rounded-3xl border bg-white">
+        <ul className="overflow-hidden rounded-2xl border bg-white">
           {items.map((item) => (
             <li key={item.id} className="group relative flex items-center gap-4 border-b px-4 py-3 last:border-b-0">
-              <button type="button" role="checkbox" aria-checked={selected.has(item.id)} aria-label={`Select ${item.name}`} onClick={() => toggle(item.id)} className={cn("flex size-6 shrink-0 items-center justify-center rounded-full border-2 outline-none focus-visible:ring-3 focus-visible:ring-zinc-900/30", selected.has(item.id) ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 text-transparent")}>
+              <button type="button" role="checkbox" aria-checked={selected.has(item.id)} aria-label={`Select ${item.name}`} onClick={() => toggle(item.id)} className={cn("flex size-6 shrink-0 items-center justify-center rounded-full border-2 outline-none focus-visible:ring-3 focus-visible:ring-slate-900/30", selected.has(item.id) ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-transparent")}>
                 <Check className="size-3.5" />
               </button>
               <button type="button" onClick={() => openEdit(item)} className="flex min-w-0 flex-1 items-center gap-4 text-left outline-none focus-visible:underline">
@@ -197,7 +197,7 @@ export default function CataloguePage() {
             </li>
           ))}
           <li>
-            <button type="button" onClick={openAdd} className="flex w-full items-center justify-center gap-2 border-t border-dashed px-4 py-4 text-sm font-medium text-muted-foreground hover:bg-zinc-50 hover:text-zinc-900 focus-visible:bg-zinc-50 focus-visible:outline-none">
+            <button type="button" onClick={openAdd} className="flex w-full items-center justify-center gap-2 border-t border-dashed px-4 py-4 text-sm font-medium text-muted-foreground hover:bg-slate-50 hover:text-slate-900 focus-visible:bg-slate-50 focus-visible:outline-none">
               <Plus className="size-4" /> Add item
             </button>
           </li>

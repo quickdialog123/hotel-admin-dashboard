@@ -38,11 +38,11 @@ export function SearchBar({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="h-11 w-full rounded-full border bg-white pr-4 pl-11 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-zinc-900 focus-visible:ring-3 focus-visible:ring-zinc-900/15"
+          className="h-11 w-full rounded-xl border bg-white pr-4 pl-11 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-slate-900 focus-visible:ring-3 focus-visible:ring-slate-900/15"
         />
       </div>
       {showSubmit && (
-        <button type="submit" aria-label={label} className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-zinc-900 text-white transition-colors hover:bg-zinc-700 focus-visible:ring-3 focus-visible:ring-zinc-900/30 focus-visible:outline-none">
+        <button type="submit" aria-label={label} className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition-colors hover:bg-slate-700 focus-visible:ring-3 focus-visible:ring-slate-900/30 focus-visible:outline-none">
           <ArrowRight className="size-4" />
         </button>
       )}

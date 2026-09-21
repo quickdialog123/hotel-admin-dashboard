@@ -11,13 +11,13 @@ export function TemplatePreview({ category, header, body, footer, buttons, value
           {header && (header.type === "TEXT" ? (
             header.text && <p className="mb-1 font-semibold">{renderTemplateText(header.text, values)}</p>
           ) : (
-            <div className="mb-2 flex h-24 items-center justify-center gap-1.5 rounded-lg bg-zinc-100 text-xs text-zinc-500">
+            <div className="mb-2 flex h-24 items-center justify-center gap-1.5 rounded-lg bg-slate-100 text-xs text-slate-500">
               <HeaderIcon className="size-4" /> {header.mediaSample || `${header.type.toLowerCase()} header`}
             </div>
           ))}
-          <p className="whitespace-pre-wrap">{body.trim() ? renderTemplateText(body, values) : <span className="text-zinc-400">Your message body…</span>}</p>
-          {footer && <p className="mt-1 text-[11px] text-zinc-500">{footer}</p>}
-          {category === "MARKETING" && <p className="mt-1 text-[11px] text-zinc-500 italic">{MARKETING_OPT_OUT_LINE}</p>}
+          <p className="whitespace-pre-wrap">{body.trim() ? renderTemplateText(body, values) : <span className="text-slate-400">Your message body…</span>}</p>
+          {footer && <p className="mt-1 text-[11px] text-slate-500">{footer}</p>}
+          {category === "MARKETING" && <p className="mt-1 text-[11px] text-slate-500 italic">{MARKETING_OPT_OUT_LINE}</p>}
         </WaBubble>
         {buttons.filter((b) => b.text.trim()).map((b, i) => {
           const Icon = b.type === "URL" ? ExternalLink : b.type === "PHONE_NUMBER" ? Phone : Reply

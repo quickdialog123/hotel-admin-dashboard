@@ -37,10 +37,10 @@ export default function GuestProfilePage() {
   const [saving, setSaving] = useState(false)
 
   if (error) return <ErrorState message={error} onRetry={reload} />
-  if (loading && !data) return <Skeleton className="h-96 rounded-3xl" />
+  if (loading && !data) return <Skeleton className="h-96 rounded-2xl" />
   if (!data || !form) {
     return (
-      <div className="rounded-3xl border bg-white p-10 text-center">
+      <div className="rounded-2xl border bg-white p-10 text-center">
         <p className="font-medium">Guest not found</p>
         <Link href="/guests" className="mt-2 inline-block text-sm underline">Back to guests</Link>
       </div>
@@ -100,7 +100,7 @@ export default function GuestProfilePage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="space-y-4 rounded-3xl border bg-white p-6">
+        <section className="space-y-4 rounded-2xl border bg-white p-6">
           <h2 className="font-semibold">Contact & stay</h2>
           <div className="space-y-2">
             <Label htmlFor="p-name">Name</Label>
@@ -136,15 +136,15 @@ export default function GuestProfilePage() {
           </div>
         </section>
 
-        <section className="space-y-4 rounded-3xl border bg-white p-6">
+        <section className="space-y-4 rounded-2xl border bg-white p-6">
           <h2 className="font-semibold">Preferences & notes</h2>
           <div className="space-y-2">
             <Label htmlFor="p-pref">Preferences</Label>
             <div className="flex flex-wrap gap-1.5">
               {form.preferences.map((p) => (
-                <span key={p} className="inline-flex items-center gap-1 rounded-full bg-zinc-100 py-0.5 pr-1 pl-2.5 text-xs font-medium">
+                <span key={p} className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-0.5 pr-1 pl-2.5 text-xs font-medium">
                   {p}
-                  <button type="button" aria-label={`Remove ${p}`} className="flex size-4 items-center justify-center rounded-full hover:bg-zinc-300" onClick={() => setForm({ ...form, preferences: form.preferences.filter((x) => x !== p) })}>
+                  <button type="button" aria-label={`Remove ${p}`} className="flex size-4 items-center justify-center rounded-full hover:bg-slate-300" onClick={() => setForm({ ...form, preferences: form.preferences.filter((x) => x !== p) })}>
                     <X className="size-3" />
                   </button>
                 </span>
