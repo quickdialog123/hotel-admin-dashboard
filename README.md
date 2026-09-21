@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Concierge — Hotel Admin Dashboard (frontend MVP)
 
-## Getting Started
-
-First, run the development server:
+Admin dashboard for a hotel's AI-powered WhatsApp receptionist. Next.js (App Router) + TypeScript + Tailwind v4 + shadcn/ui (Base UI) + lucide-react. **All data is mocked** — see `lib/api/`.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install && npm run dev   # http://localhost:3000  (any email/password works)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Folder structure
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+app/
+  login/                 mocked login
+  (app)/                 authenticated shell (top nav) + every section
+    dashboard/ whatsapp/ knowledge-base/ (+ assistant/) catalogue/
+    guests/ (+ [id]/) receptionist/ broadcasts/ (+ new/, [id]/, templates/new/)
+    conversations/ (+ [id]/) settings/
+components/
+  ui/                    shadcn primitives
+  app/                   shared app components (top nav, pills, states, search bar, stepper, phone frame…)
+  catalogue/ guests/ receptionist/ broadcasts/ conversations/   feature components
+lib/
+  api/                   ← the mock data layer (the ONLY place data comes from)
+  hooks/use-async.ts     loading / error / reload wrapper around any lib/api call
+  format.ts              price / date helpers
+API_CONTRACT.md          every function the UI calls, with types
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Swapping the mock layer for the real backend
 
-## Learn More
+UI components never contain data; they call typed async functions from `lib/api/*.ts`. To wire up the real backend:
 
-To learn more about Next.js, take a look at the following resources:
+1. Open a resource file, e.g. `lib/api/catalogue.ts`.
+2. Keep the exported **types and function signatures**; replace each function body with a `fetch` to the real endpoint, returning the same shape.
+3. Delete the in-memory store and `delay()` calls from that file. When every file is converted, delete `lib/api/_mock.ts`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Error handling already works: any thrown `Error` from an API function surfaces in the UI's error state (or a toast for mutations). Search for `TODO(backend)` for the places that need real integration (auth, Meta Embedded Signup, AI assistant, conversation hand-off, file storage, template submission).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Demo aids
 
-## Deploy on Vercel
+- Latency is simulated at 300–600 ms per call so loading states are visible.
+- To see error states, run `window.__MOCK_FAIL__ = true` in the browser console, then retry / navigate. Set it back to `false` to recover.
+- WhatsApp page → "Simulate error" shows the error treatment for a broken connection.
+- Mock data lives in memory and resets on a full page reload.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Design notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Monochrome (near-black `#111` as the only accent). Colour is used only for errors (red), "needs attention" / out-of-stock (amber) and the light indigo "in progress" pill.
