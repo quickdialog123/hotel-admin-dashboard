@@ -1,4 +1,4 @@
-import { clone, delay } from "./_mock"
+import { delay } from "./_mock"
 
 import { z } from "zod"
 
@@ -36,14 +36,15 @@ export const wabaConnectionSchema =
   })
 
 export type WabaConnection = z.infer<typeof wabaConnectionSchema>
+export type WabaConnectionStatus = WabaConnection["status"]
 
-export const completeSignupSchema = z.object({
+export const embeddedSignupInputSchema = z.object({
   code: z.string().min(1),
   wabaId: z.string().min(1),
   phoneNumberId: z.string().min(1),
 })
 
-export type CompleteSignupInput = z.infer<typeof completeSignupSchema>
+export type CompleteSignupInput = z.infer<typeof embeddedSignupInputSchema>
 
 export type WabaDashboardStats = {
   conversationsThisWeek: number
@@ -52,18 +53,6 @@ export type WabaDashboardStats = {
   ordersToday: number
 }
 
-let connection: WabaConnection = {
-  status: "connected",
-  wabaId: "104928374650192",
-  phoneNumber: "+44 20 7946 0958",
-  displayName: "The Harbour House",
-  wabaStatus: "APPROVED",
-  qualityRating: "GREEN",
-  connectedAt: "2026-06-02T09:14:00.000Z",
-  errorMessage: null,
-}
-
-
 export function getWabaConnection() {
   return getJson(
     "whatsapp/status",
@@ -71,18 +60,12 @@ export function getWabaConnection() {
   )
 }
 
-export async function disconnectWaba(): Promise<WabaConnection> {
-  connection = {
-    status: "not_connected",
-    wabaId: null,
-    phoneNumber: null,
-    displayName: null,
-    wabaStatus: null,
-    qualityRating: null,
-    connectedAt: null,
-    errorMessage: null,
-  }
-  return delay(clone(connection))
+export function disconnectWaba() {
+  return postJson(
+    "whatsapp/disconnect",
+    {},
+    wabaConnectionSchema,
+  )
 }
 
 export function completeWabaSignup(
@@ -92,19 +75,8 @@ export function completeWabaSignup(
     "whatsapp/embedded-signup/complete",
     input,
     wabaConnectionSchema,
-    completeSignupSchema,
+    embeddedSignupInputSchema,
   )
-}
-
-/** Mock-only helper so the error state can be demoed from the UI. */
-export async function simulateWabaError(): Promise<WabaConnection> {
-  connection = {
-    ...connection,
-    status: "error",
-    errorMessage:
-      "Meta rejected the access token (code 190). The token has expired — reconnect to restore your receptionist.",
-  }
-  return delay(clone(connection))
 }
 
 export async function getDashboardStats(): Promise<WabaDashboardStats> {

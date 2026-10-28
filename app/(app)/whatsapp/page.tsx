@@ -31,7 +31,6 @@ import {
   completeWabaSignup,
   disconnectWaba,
   getWabaConnection,
-  simulateWabaError,
 } from "@/lib/api/waba"
 
 const whatsappConnectionKey = [
@@ -73,7 +72,6 @@ export default function WhatsAppPage() {
     refetch,
   } = useQuery({
     queryKey: whatsappConnectionKey,
-
     queryFn: getWabaConnection,
   })
 
@@ -131,67 +129,19 @@ export default function WhatsAppPage() {
       },
     })
 
-  const simulateErrorMutation =
-    useMutation({
-      mutationFn:
-        simulateWabaError,
-
-      onSuccess: (
-        connection,
-      ) => {
-        queryClient.setQueryData(
-          whatsappConnectionKey,
-          connection,
-        )
-      },
-
-      onError: (error) => {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Couldn't simulate error",
-        )
-      },
-    })
-
-  const connecting =
-    connectMutation.isPending
-
   async function connect() {
     if (
-      connecting ||
+      connectMutation.isPending ||
       !metaReady
     ) {
       return
     }
 
     try {
-      const result =
-        await launchEmbeddedSignup()
+      const result = await launchEmbeddedSignup()
 
-      await connectMutation.mutateAsync(
-        {
-          code: result.code,
-          wabaId:
-            result.wabaId,
-          phoneNumberId:
-            result.phoneNumberId,
-        },
-      )
+      connectMutation.mutate(result)
     } catch (error) {
-      /*
-       * Mutation errors are already handled
-       * by onError.
-       *
-       * This catch handles errors coming
-       * directly from Meta Embedded Signup.
-       */
-      if (
-        connectMutation.isError
-      ) {
-        return
-      }
-
       toast.error(
         error instanceof Error
           ? error.message
@@ -276,11 +226,11 @@ export default function WhatsAppPage() {
                         connect
                       }
                       disabled={
-                        connecting ||
+                        connectMutation.isPending ||
                         !metaReady
                       }
                     >
-                      {connecting ? (
+                      {connectMutation.isPending ? (
                         <Loader2 className="animate-spin" />
                       ) : (
                         <RefreshCw />
@@ -309,17 +259,17 @@ export default function WhatsAppPage() {
                       connect
                     }
                     disabled={
-                      connecting ||
+                      connectMutation.isPending ||
                       !metaReady
                     }
                   >
-                    {connecting ? (
+                    {connectMutation.isPending ? (
                       <Loader2 className="animate-spin" />
                     ) : (
                       <MessageCircle />
                     )}
 
-                    {connecting
+                    {connectMutation.isPending
                       ? "Connecting…"
                       : data.status ===
                           "error"
@@ -358,7 +308,7 @@ export default function WhatsAppPage() {
               </p>
             )}
 
-            {connecting && (
+            {connectMutation.isPending && (
               <p className="mt-6 text-sm text-muted-foreground">
                 Waiting for Meta
                 signup to complete…
@@ -429,36 +379,6 @@ export default function WhatsAppPage() {
             )}
           </div>
 
-          {data.status ===
-            "connected" && (
-            <div className="flex items-center justify-between gap-4 rounded-2xl border border-dashed bg-white p-5 text-sm">
-              <div>
-                <p className="font-medium">
-                  Demo tools
-                </p>
-
-                <p className="text-muted-foreground">
-                  Preview the error
-                  treatment staff
-                  would see if Meta
-                  rejects the
-                  connection.
-                </p>
-              </div>
-
-              <Button
-                variant="outline"
-                disabled={
-                  simulateErrorMutation.isPending
-                }
-                onClick={() =>
-                  simulateErrorMutation.mutate()
-                }
-              >
-                Simulate error
-              </Button>
-            </div>
-          )}
         </div>
       )}
 

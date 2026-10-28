@@ -1,13 +1,6 @@
 import ky from "ky"
 import type { z } from "zod"
 import { env } from "@/lib/env"
-import type { ApiError } from "./errors"
-
-type ErrorPayload = {
-  message?: string | string[]
-  code?: string
-  details?: unknown
-}
 
 
 export const apiClient = ky.create({
@@ -31,8 +24,9 @@ export const apiClient = ky.create({
   },
   hooks: {
     afterResponse: [
-      // to  next developer keep auth lifecycle centralized
-      // or handle expired sessions etc...
+      // TODO(QD-60):
+      // Keep auth lifecycle centralized here.
+      // Later handle 401 -> refresh session -> retry once.
     ],
   },
 })
