@@ -1,22 +1,49 @@
 import { clone, delay } from "./_mock"
 
-export type WabaConnectionStatus = "connected" | "not_connected" | "error"
+import { z } from "zod"
 
-/** Mirrors the shape of a Meta WhatsApp Business Account + phone number. */
-export type WabaConnection = {
-  status: WabaConnectionStatus
-  /** WhatsApp Business Account ID (Meta `waba_id`) */
-  wabaId: string | null
-  /** Display phone number, E.164 formatted */
-  phoneNumber: string | null
-  displayName: string | null
-  /** Meta account review status */
-  wabaStatus: "APPROVED" | "PENDING" | "RESTRICTED" | null
-  qualityRating: "GREEN" | "YELLOW" | "RED" | null
-  connectedAt: string | null
-  /** Human-readable reason when status === "error" */
-  errorMessage: string | null
-}
+import {
+  getJson,
+  postJson,
+} from "./client"
+
+export const wabaConnectionSchema =
+  z.object({
+    status: z.enum([
+      "connected",
+      "not_connected",
+      "error",
+    ]),
+    wabaId: z.string().nullable(),
+    phoneNumber: z.string().nullable(),
+    displayName: z.string().nullable(),
+    wabaStatus: z
+        .enum([
+          "APPROVED",
+          "PENDING",
+          "RESTRICTED",
+        ])
+        .nullable(),
+    qualityRating: z
+        .enum([
+          "GREEN",
+          "YELLOW",
+          "RED",
+        ])
+        .nullable(),
+    connectedAt: z.string().nullable(),
+    errorMessage: z.string().nullable(),
+  })
+
+export type WabaConnection = z.infer<typeof wabaConnectionSchema>
+
+export const completeSignupSchema = z.object({
+  code: z.string().min(1),
+  wabaId: z.string().min(1),
+  phoneNumberId: z.string().min(1),
+})
+
+export type CompleteSignupInput = z.infer<typeof completeSignupSchema>
 
 export type WabaDashboardStats = {
   conversationsThisWeek: number
@@ -36,26 +63,12 @@ let connection: WabaConnection = {
   errorMessage: null,
 }
 
-export async function getWabaConnection(): Promise<WabaConnection> {
-  return delay(clone(connection))
-}
 
-// TODO(backend): replace with Meta Embedded Signup — the real flow returns a
-// code that the backend exchanges for a WABA + phone number.
-export async function connectWaba(): Promise<WabaConnection> {
-  connection = {
-    status: "connected",
-    wabaId: "104928374650192",
-    phoneNumber: "+44 20 7946 0958",
-    displayName: "The Harbour House",
-    wabaStatus: "APPROVED",
-    qualityRating: "GREEN",
-    connectedAt: new Date().toISOString(),
-    errorMessage: null,
-  }
-  await delay(null)
-  await delay(null)
-  return clone(connection)
+export function getWabaConnection() {
+  return getJson(
+    "whatsapp/status",
+    wabaConnectionSchema,
+  )
 }
 
 export async function disconnectWaba(): Promise<WabaConnection> {
@@ -70,6 +83,17 @@ export async function disconnectWaba(): Promise<WabaConnection> {
     errorMessage: null,
   }
   return delay(clone(connection))
+}
+
+export function completeWabaSignup(
+  input: CompleteSignupInput,
+) {
+  return postJson(
+    "whatsapp/embedded-signup/complete",
+    input,
+    wabaConnectionSchema,
+    completeSignupSchema,
+  )
 }
 
 /** Mock-only helper so the error state can be demoed from the UI. */
