@@ -1,7 +1,12 @@
 import { TopNav } from "@/components/app/top-nav"
+import { auth } from "@/auth"
+import { redirect } from "next/navigation"
 
-// TODO(backend): protect this route group with real auth (redirect to /login when unauthenticated).
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth()
+
+  if (!session?.user) redirect("/login")
+
   return (
     <div className="app-bg min-h-screen overflow-x-clip">
       <TopNav />
