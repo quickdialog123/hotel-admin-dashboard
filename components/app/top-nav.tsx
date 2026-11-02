@@ -1,10 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Check, ChevronDown, LogOut, Settings, Sparkles, User } from "lucide-react"
+import { toast } from "sonner"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { clearAuthQueryCache } from "@/lib/query/auth-cache"
 
 type NavLink = { href: string; label: string }
 type NavItem = NavLink & {
@@ -36,7 +39,36 @@ const pillBase = "text-[15px] font-medium whitespace-nowrap transition-colors ou
 
 export function TopNav() {
   const pathname = usePathname()
+  const router = useRouter()
   const settingsActive = isWithin(pathname, "/settings")
+  const queryClient = useQueryClient()
+  const signOutMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/session/signout", {
+        method: "POST",
+        credentials: "same-origin",
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => null)
+        if (error?.code === "LOGOUT_UNCONFIRMED" || error?.code === "SESSION_REPLACED") {
+          // These responses confirm local sign-out, even if Nest revocation was not confirmed.
+          clearAuthQueryCache(queryClient)
+          router.replace("/login")
+        }
+        throw new Error("Sign out failed")
+      }
+    },
+    onSuccess: () => {
+      clearAuthQueryCache(queryClient)
+      router.replace("/login")
+    },
+    onError: () => toast.error("Could not complete sign out. Please try again."),
+  })
+
+  function handleSignOut() {
+    signOutMutation.mutate()
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b bg-white">
@@ -97,7 +129,7 @@ export function TopNav() {
               <Settings /> Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem render={<Link href="/login" />}>
+            <DropdownMenuItem onClick={handleSignOut} disabled={signOutMutation.isPending}>
               <LogOut /> Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
