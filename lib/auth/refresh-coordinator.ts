@@ -12,226 +12,132 @@ export type BackendCredentials = {
   accessTokenExpiresAt: number
 }
 
-type RefreshCoordinatorOptions = {
-  recentResultTtlMs?: number
-  now?: () => number
+type SessionState = {
+  status: "active" | "ending" | "invalid"
+  flight?: Promise<BackendCredentials>
+  recent?: { credentials: BackendCredentials; expiresAt: number }
+  version: number
+  expiresAt: number
 }
 
 export function createRefreshCoordinator(
   refreshBackend: (current: BackendCredentials) => Promise<BackendCredentials>,
-  options: RefreshCoordinatorOptions = {},
+  options: { recentResultTtlMs?: number; now?: () => number } = {},
 ) {
-  const recentResultTtlMs = options.recentResultTtlMs ?? 60_000
   const now = options.now ?? Date.now
-  const invalidationTtlMs = AUTH_SESSION_MAX_AGE_MS + 60_000
-  const pending = new Map<string, Promise<BackendCredentials>>()
-  const activeBySession = new Map<string, Promise<BackendCredentials>>()
-  const recent = new Map<
-    string,
-    { credentials: BackendCredentials; expiresAt: number }
-  >()
-  const invalidated = new Map<string, number>()
-  const transitioning = new Set<string>()
-  const transitionCounts = new Map<string, number>()
-  const transitionQueues = new Map<string, Promise<unknown>>()
+  const recentTtl = options.recentResultTtlMs ?? 60_000
+  const sessions = new Map<string, SessionState>()
 
-  const refreshKey = (sessionId: string, version: number) =>
-    `${sessionId}:${version}`
+  function cleanup() {
+    for (const [id, state] of sessions) {
+      if (state.recent && state.recent.expiresAt <= now()) state.recent = undefined
+      if (state.expiresAt <= now() && !state.flight && state.status !== "ending") {
+        sessions.delete(id)
+      }
+    }
+  }
+  const timer = setInterval(cleanup, 60_000)
+  timer.unref()
 
-  function isInvalidated(sessionId: string): boolean {
-    const expiresAt = invalidated.get(sessionId)
-
-    if (expiresAt === undefined) return false
-    if (expiresAt > now()) return true
-
-    invalidated.delete(sessionId)
-    return false
+  function getState(current: BackendCredentials): SessionState {
+    cleanup()
+    let state = sessions.get(current.authSessionId)
+    if (!state) {
+      state = { status: "active", version: current.tokenVersion, expiresAt: 0 }
+      sessions.set(current.authSessionId, state)
+    }
+    state.expiresAt = now() + AUTH_SESSION_MAX_AGE_MS + 60_000
+    return state
   }
 
-  function getRecent(sessionId: string, version: number): BackendCredentials | null {
-    for (const [key, cached] of recent) {
-      if (cached.expiresAt <= now()) recent.delete(key)
-    }
-
-    if (isInvalidated(sessionId)) return null
-
-    const key = refreshKey(sessionId, version)
-    const cached = recent.get(key)
-
-    if (!cached) return null
-
-    if (cached.expiresAt <= now()) {
-      recent.delete(key)
-      return null
-    }
-
-    return cached.credentials
+  function isActive(id: string): boolean {
+    cleanup()
+    return !sessions.has(id) || sessions.get(id)?.status === "active"
   }
 
-  function refresh(
-    current: BackendCredentials,
-    allowDuringTransition = false,
-  ): Promise<BackendCredentials> {
-    const { authSessionId, tokenVersion } = current
+  function invalidate(id: string): void {
+    const state = sessions.get(id) ?? { status: "invalid", version: 0, expiresAt: 0 }
+    state.status = "invalid"
+    state.recent = undefined
+    state.expiresAt = now() + AUTH_SESSION_MAX_AGE_MS + 60_000
+    sessions.set(id, state)
+  }
 
-    if (
-      isInvalidated(authSessionId) ||
-      (transitioning.has(authSessionId) && !allowDuringTransition)
-    ) {
-      return Promise.reject(new Error("Authentication session is invalidated"))
+  // Only the immediately previous cookie can recover from the single cached result.
+  function latest(state: SessionState, current: BackendCredentials) {
+    if (current.tokenVersion >= state.version) {
+      state.version = current.tokenVersion
+      return current
     }
+    const cached = state.recent
+    return cached && cached.expiresAt > now() &&
+      current.tokenVersion + 1 === state.version &&
+      cached.credentials.tokenVersion === state.version
+      ? cached.credentials
+      : null
+  }
 
-    const key = refreshKey(authSessionId, tokenVersion)
-    const cached = getRecent(authSessionId, tokenVersion)
+  async function resolve(current: BackendCredentials): Promise<BackendCredentials | null> {
+    const state = getState(current)
+    if (state.status !== "active") return null
+    if (state.flight) await state.flight
+    return state.status === "active" ? latest(state, current) : null
+  }
 
-    if (cached) return Promise.resolve(cached)
+  async function refresh(current: BackendCredentials): Promise<BackendCredentials | null> {
+    const state = getState(current)
+    if (state.status !== "active") return null
+    if (state.flight) {
+      await state.flight
+      return refresh(current)
+    }
+    const credentials = latest(state, current)
+    if (!credentials || credentials.tokenVersion > current.tokenVersion) return credentials
 
-    const currentFlight = pending.get(key)
-
-    if (currentFlight) return currentFlight
-
-    const operation = Promise.resolve()
-      .then(() => refreshBackend(current))
+    state.flight = Promise.resolve()
+      .then(() => {
+        if (state.status === "invalid") throw new Error("Session invalidated during refresh")
+        return refreshBackend(credentials)
+      })
       .then((next) => {
-        if (isInvalidated(authSessionId)) {
-          throw new Error("Authentication session was invalidated during refresh")
+        if (state.status === "invalid") throw new Error("Session invalidated during refresh")
+        if (next.authSessionId !== current.authSessionId ||
+          next.tokenVersion !== current.tokenVersion + 1) {
+          throw new Error("Invalid refresh result")
         }
-
-        if (
-          next.authSessionId !== authSessionId ||
-          next.tokenVersion !== tokenVersion + 1
-        ) {
-          throw new Error("Backend returned an invalid token version")
-        }
-
-        recent.set(key, {
-          credentials: next,
-          expiresAt: now() + recentResultTtlMs,
-        })
-
+        state.version = next.tokenVersion
+        state.recent = { credentials: next, expiresAt: now() + recentTtl }
         return next
       })
-      .finally(() => {
-        pending.delete(key)
-        if (activeBySession.get(authSessionId) === operation) {
-          activeBySession.delete(authSessionId)
-        }
+      .catch((error) => {
+        invalidate(current.authSessionId)
+        throw error
       })
+      .finally(() => { state.flight = undefined })
 
-    pending.set(key, operation)
-    activeBySession.set(authSessionId, operation)
-
-    return operation
+    const next = await state.flight
+    return state.status === "active" ? next : null
   }
 
-  async function getLatest(
+  async function end(
     current: BackendCredentials,
-  ): Promise<BackendCredentials> {
-    if (isInvalidated(current.authSessionId)) {
-      throw new Error("Authentication session is invalidated")
-    }
-
-    const active = activeBySession.get(current.authSessionId)
-
-    if (active) {
-      try {
-        return await active
-      } catch {
-        // Use the supplied credentials only if no completed rotation is available.
-      }
-    }
-
-    return getRecent(current.authSessionId, current.tokenVersion) ?? current
-  }
-
-  async function waitForTransition(
-    current: BackendCredentials,
-  ): Promise<BackendCredentials> {
-    const transition = transitionQueues.get(current.authSessionId)
-
-    if (transition) {
-      try {
-        await transition
-      } catch {
-        // Read the current session state below and fail closed if invalidated.
-      }
-    }
-
-    return getLatest(current)
-  }
-
-  async function runSessionTransition<T>(
-    sessionId: string,
-    operation: (latest: BackendCredentials | null) => Promise<T>,
-    current?: BackendCredentials,
-  ): Promise<T> {
-    const previous = transitionQueues.get(sessionId) ?? Promise.resolve()
-    transitioning.add(sessionId)
-    transitionCounts.set(sessionId, (transitionCounts.get(sessionId) ?? 0) + 1)
-
-    const result = previous
-      .catch(() => undefined)
-      .then(async () => {
-        const active = activeBySession.get(sessionId)
-
-        if (active) {
-          try {
-            await active
-          } catch {
-            // The caller can still revoke with its last known credentials.
-          }
-        }
-
-        const latest =
-          current && !isInvalidated(sessionId)
-            ? await getLatest(current)
-            : null
-        return operation(latest)
-      })
-
-    transitionQueues.set(sessionId, result)
-
+    revoke: (latest: BackendCredentials) => Promise<void>,
+  ): Promise<boolean> {
+    const state = getState(current)
+    if (state.status !== "active") return false
+    if (!latest(state, current)) return false
+    state.status = "ending"
     try {
-      return await result
+      const credentials = state.flight ? await state.flight : latest(state, current)
+      if (sessions.get(current.authSessionId)?.status === "invalid") return false
+      if (!credentials) return false
+      await revoke(credentials)
+      return true
     } finally {
-      if (transitionQueues.get(sessionId) === result) {
-        transitionQueues.delete(sessionId)
-      }
-
-      const remainingTransitions = (transitionCounts.get(sessionId) ?? 1) - 1
-
-      if (remainingTransitions <= 0) {
-        transitionCounts.delete(sessionId)
-        transitioning.delete(sessionId)
-      } else {
-        transitionCounts.set(sessionId, remainingTransitions)
-      }
+      // Never restore stale credentials after failed or uncertain revocation.
+      invalidate(current.authSessionId)
     }
   }
 
-  function invalidate(sessionId: string, expiresAt?: number): void {
-    for (const [id, expiry] of invalidated) {
-      if (expiry <= now()) invalidated.delete(id)
-    }
-
-    invalidated.set(
-      sessionId,
-      Math.max(expiresAt ?? 0, now() + invalidationTtlMs),
-    )
-
-    for (const key of recent.keys()) {
-      if (key.startsWith(`${sessionId}:`)) recent.delete(key)
-    }
-  }
-
-  return {
-    refresh,
-    getLatest,
-    waitForTransition,
-    getRecent,
-    runSessionTransition,
-    invalidate,
-    isInvalidated,
-    isTransitioning: (sessionId: string) => transitioning.has(sessionId),
-  }
+  return { resolve, refresh, end, invalidate, isActive }
 }

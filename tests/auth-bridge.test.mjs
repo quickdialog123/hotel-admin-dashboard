@@ -3,6 +3,7 @@ import { test } from "node:test"
 
 import {
   applyBackendTokenUpdate,
+  backendCredentialsMatch,
   extractRefreshToken,
   signBackendTokenUpdate,
   verifyBackendTokenUpdate,
@@ -198,6 +199,43 @@ test("late requests using the consumed token reuse the recent rotated result", a
   assert.deepEqual(late, first)
 })
 
+test("consumed cookies are rejected after handoff expiry without another backend call", async () => {
+  let now = 1_000
+  let calls = 0
+  const coordinator = createRefreshCoordinator(async (current) => {
+    calls += 1
+    return { ...current, tokenVersion: current.tokenVersion + 1, refreshToken: "rotated" }
+  }, { now: () => now, recentResultTtlMs: 100 })
+  const current = makeCredentials()
+  const rotated = await coordinator.refresh(current)
+  now += 101
+  assert.equal(await coordinator.resolve(current), null)
+  assert.equal(await coordinator.refresh(current), null)
+  assert.equal((await coordinator.resolve(rotated)).tokenVersion, 1)
+  assert.equal(calls, 1)
+})
+
+test("different token versions never run backend refresh concurrently", async () => {
+  let release
+  let calls = 0
+  const coordinator = createRefreshCoordinator(async (current) => {
+    calls += 1
+    await new Promise((resolve) => { release = resolve })
+    return { ...current, tokenVersion: current.tokenVersion + 1 }
+  })
+  const first = coordinator.refresh(makeCredentials())
+  await new Promise((resolve) => setImmediate(resolve))
+  const second = coordinator.refresh({ ...makeCredentials(), tokenVersion: 1 })
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(calls, 1)
+  release()
+  assert.equal((await first).tokenVersion, 1)
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(calls, 2)
+  release()
+  assert.equal((await second).tokenVersion, 2)
+})
+
 test("refresh operations for separate sessions do not share state", async () => {
   let calls = 0
   const coordinator = createRefreshCoordinator(async (credentials) => {
@@ -231,10 +269,10 @@ test("session invalidation prevents a late refresh result from being accepted", 
   resolveRefresh()
 
   await assert.rejects(pending, /invalidated during refresh/i)
-  assert.equal(coordinator.getRecent(credentials.authSessionId, 0), null)
+  assert.equal(await coordinator.resolve(credentials), null)
 })
 
-test("logout transitions wait for refresh and receive the latest credentials", async () => {
+test("logout blocks new work, waits for refresh, and revokes the latest credentials", async () => {
   let resolveRefresh
   const coordinator = createRefreshCoordinator(async (credentials) => {
     await new Promise((resolve) => {
@@ -250,25 +288,27 @@ test("logout transitions wait for refresh and receive the latest credentials", a
   const credentials = makeCredentials()
   const refresh = coordinator.refresh(credentials)
   let logoutCredentials
-  const logout = coordinator.runSessionTransition(
-    credentials.authSessionId,
+  const logout = coordinator.end(
+    credentials,
     async (latest) => {
       logoutCredentials = latest
     },
-    credentials,
   )
 
   await new Promise((resolve) => setImmediate(resolve))
   assert.equal(logoutCredentials, undefined)
+  assert.equal(coordinator.isActive(credentials.authSessionId), false)
+  assert.equal(await coordinator.refresh(credentials), null)
   resolveRefresh()
-  await refresh
-  await logout
+  assert.equal(await refresh, null)
+  assert.equal(await logout, true)
 
   assert.equal(logoutCredentials.tokenVersion, 1)
   assert.equal(logoutCredentials.refreshToken, "rotated-refresh")
+  assert.equal(await coordinator.resolve(credentials), null)
 })
 
-test("failed refreshes are not cached and can fail closed", async () => {
+test("failed or uncertain refresh invalidates the session and cannot replay the token", async () => {
   let calls = 0
   const coordinator = createRefreshCoordinator(async () => {
     calls += 1
@@ -277,6 +317,68 @@ test("failed refreshes are not cached and can fail closed", async () => {
   const credentials = makeCredentials()
 
   await assert.rejects(coordinator.refresh(credentials), /uncertain/)
-  await assert.rejects(coordinator.refresh(credentials), /uncertain/)
-  assert.equal(calls, 2)
+  assert.equal(await coordinator.refresh(credentials), null)
+  assert.equal(coordinator.isActive(credentials.authSessionId), false)
+  assert.equal(calls, 1)
+})
+
+test("failed logout never restores old credentials", async () => {
+  const coordinator = createRefreshCoordinator(async (current) => ({
+    ...current, tokenVersion: current.tokenVersion + 1, refreshToken: "rotated",
+  }))
+  const current = makeCredentials()
+  await coordinator.refresh(current)
+  await assert.rejects(coordinator.end(current, async (latest) => {
+    assert.equal(latest.refreshToken, "rotated")
+    throw new Error("logout unconfirmed")
+  }), /logout unconfirmed/)
+  assert.equal(await coordinator.resolve(current), null)
+  assert.equal(await coordinator.refresh(current), null)
+})
+
+test("invalidation before the backend call prevents even the scheduled refresh", async () => {
+  let calls = 0
+  const coordinator = createRefreshCoordinator(async (current) => {
+    calls += 1
+    return { ...current, tokenVersion: current.tokenVersion + 1 }
+  })
+  const current = makeCredentials()
+  const refreshing = coordinator.refresh(current)
+  coordinator.invalidate(current.authSessionId)
+  await assert.rejects(refreshing, /invalidated during refresh/)
+  assert.equal(calls, 0)
+})
+
+test("a second logout is rejected rather than queued", async () => {
+  let release
+  const coordinator = createRefreshCoordinator(async (current) => current)
+  const current = makeCredentials()
+  const first = coordinator.end(current, async () => {
+    await new Promise((resolve) => { release = resolve })
+  })
+  assert.equal(await coordinator.end(current, async () => assert.fail("Must not queue")), false)
+  release()
+  assert.equal(await first, true)
+})
+
+test("only the immediately previous cookie gets the single recent handoff", async () => {
+  const coordinator = createRefreshCoordinator(async (current) => ({
+    ...current, tokenVersion: current.tokenVersion + 1,
+  }))
+  const first = makeCredentials()
+  const second = await coordinator.refresh(first)
+  const third = await coordinator.refresh(second)
+  assert.equal(await coordinator.resolve(first), null)
+  assert.deepEqual(await coordinator.resolve(second), third)
+  assert.equal(await coordinator.end(first, async () => assert.fail("Stale logout must not run")), false)
+  assert.equal(coordinator.isActive(first.authSessionId), true)
+})
+
+test("a non-null Auth.js session is not proof that a credential update was persisted", () => {
+  const current = makeCredentials()
+  const expected = { ...current, tokenVersion: 1, accessToken: "new", refreshToken: "rotated" }
+  assert.equal(backendCredentialsMatch(null, expected), false)
+  assert.equal(backendCredentialsMatch(current, expected), false)
+  assert.equal(backendCredentialsMatch({ ...expected, refreshToken: "wrong" }, expected), false)
+  assert.equal(backendCredentialsMatch({ ...expected }, expected), true)
 })

@@ -12,6 +12,7 @@ import { getServerEnv } from "@/lib/server/env"
 
 const REQUEST_TIMEOUT_MS = 12_000
 const MAX_BFF_BODY_BYTES = 10 * 1024 * 1024
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 export class NestApiError extends Error {
   constructor(public readonly status: number) {
@@ -28,10 +29,10 @@ function backendUrl(path: string): URL {
   return new URL(`${origin}/${prefix}/${path.replace(/^\/+/, "")}`)
 }
 
-function backendHeaders(headers?: HeadersInit): Headers {
+function backendHeaders(headers?: HeadersInit, setJsonAccept = true): Headers {
   const result = new Headers(headers)
   result.set("Origin", getServerEnv().FRONTEND_ORIGIN)
-  result.set("Accept", "application/json")
+  if (setJsonAccept) result.set("Accept", "application/json")
   return result
 }
 
@@ -47,10 +48,14 @@ export function readSetCookieHeaders(headers: Headers): string[] {
   return singleCookie ? [singleCookie] : []
 }
 
-async function fetchNest(path: string, init: RequestInit = {}): Promise<Response> {
+async function fetchNest(
+  path: string,
+  init: RequestInit = {},
+  setJsonAccept = true,
+): Promise<Response> {
   return fetch(backendUrl(path), {
     ...init,
-    headers: backendHeaders(init.headers),
+    headers: backendHeaders(init.headers, setJsonAccept),
     redirect: "manual",
     cache: "no-store",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -241,13 +246,7 @@ export async function logoutWithNest(
   await revokeNestTokens(credentials.accessToken, credentials.refreshToken)
 }
 
-const FORWARDED_REQUEST_HEADERS = [
-  "accept",
-  "content-type",
-  "if-match",
-  "if-none-match",
-  "range",
-] as const
+const FORWARDED_REQUEST_HEADERS = ["accept", "content-type"] as const
 
 export class BffBodyTooLargeError extends Error {
   constructor() {
@@ -261,6 +260,42 @@ export class NestResponseTooLargeError extends Error {
     super("Backend response exceeds the BFF size limit")
     this.name = "NestResponseTooLargeError"
   }
+}
+
+async function readLimitedBody(
+  stream: ReadableStream<Uint8Array>,
+  sizeError: Error,
+): Promise<ArrayBuffer> {
+  const reader = stream.getReader()
+  const chunks: Uint8Array[] = []
+  let totalBytes = 0
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    totalBytes += value.byteLength
+    if (totalBytes > MAX_BFF_BODY_BYTES) {
+      try {
+        await reader.cancel()
+      } catch {
+        // Preserve the body-size error if stream cancellation also fails.
+      }
+      throw sizeError
+    }
+
+    chunks.push(value)
+  }
+
+  const body = new Uint8Array(totalBytes)
+  let offset = 0
+
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+
+  return body.buffer
 }
 
 export function isAllowedBffPath(
@@ -288,9 +323,7 @@ export function isAllowedBffPath(
   if (
     normalized.length === 2 &&
     normalized[0] === "hotels" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
-      normalized[1],
-    )
+    UUID_PATTERN.test(normalized[1])
   ) {
     return normalizedMethod === "GET" || normalizedMethod === "PATCH"
   }
@@ -298,9 +331,7 @@ export function isAllowedBffPath(
   if (
     normalized.length === 3 &&
     normalized[0] === "hotels" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
-      normalized[1],
-    ) &&
+    UUID_PATTERN.test(normalized[1]) &&
     normalized[2] === "deactivate"
   ) {
     return normalizedMethod === "POST"
@@ -312,41 +343,22 @@ export function isAllowedBffPath(
 export async function readBffRequestBody(
   request: Request,
 ): Promise<ArrayBuffer | undefined> {
-  if (["GET", "HEAD"].includes(request.method.toUpperCase()) || !request.body) {
+  const stream = request.body
+  if (["GET", "HEAD"].includes(request.method.toUpperCase()) || !stream) {
     return undefined
   }
 
   const declaredLength = Number(request.headers.get("content-length"))
   if (Number.isFinite(declaredLength) && declaredLength > MAX_BFF_BODY_BYTES) {
+    try {
+      await stream.cancel()
+    } catch {
+      // Preserve the body-size error if stream cancellation also fails.
+    }
     throw new BffBodyTooLargeError()
   }
 
-  const reader = request.body.getReader()
-  const chunks: Uint8Array[] = []
-  let totalBytes = 0
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-
-    totalBytes += value.byteLength
-    if (totalBytes > MAX_BFF_BODY_BYTES) {
-      await reader.cancel()
-      throw new BffBodyTooLargeError()
-    }
-
-    chunks.push(value)
-  }
-
-  const body = new Uint8Array(totalBytes)
-  let offset = 0
-
-  for (const chunk of chunks) {
-    body.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-
-  return body.buffer
+  return readLimitedBody(stream, new BffBodyTooLargeError())
 }
 
 async function readNestResponseBody(response: Response): Promise<ArrayBuffer | null> {
@@ -354,36 +366,15 @@ async function readNestResponseBody(response: Response): Promise<ArrayBuffer | n
 
   const declaredLength = Number(response.headers.get("content-length"))
   if (Number.isFinite(declaredLength) && declaredLength > MAX_BFF_BODY_BYTES) {
-    await response.body.cancel()
+    try {
+      await response.body.cancel()
+    } catch {
+      // Preserve the body-size error if stream cancellation also fails.
+    }
     throw new NestResponseTooLargeError()
   }
 
-  const reader = response.body.getReader()
-  const chunks: Uint8Array[] = []
-  let totalBytes = 0
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-
-    totalBytes += value.byteLength
-    if (totalBytes > MAX_BFF_BODY_BYTES) {
-      await reader.cancel()
-      throw new NestResponseTooLargeError()
-    }
-
-    chunks.push(value)
-  }
-
-  const body = new Uint8Array(totalBytes)
-  let offset = 0
-
-  for (const chunk of chunks) {
-    body.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-
-  return body.buffer
+  return readLimitedBody(response.body, new NestResponseTooLargeError())
 }
 
 export async function proxyNestRequest(
@@ -397,13 +388,8 @@ export async function proxyNestRequest(
   }
 
   const method = request.method.toUpperCase()
-  if (!["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"].includes(method)) {
-    return Response.json({ message: "Method not allowed" }, { status: 405 })
-  }
-
   const encodedPath = pathSegments.map(encodeURIComponent).join("/")
-  const url = backendUrl(encodedPath)
-  url.search = new URL(request.url).search
+  const query = new URL(request.url).search
 
   const headers = new Headers()
   for (const name of FORWARDED_REQUEST_HEADERS) {
@@ -411,20 +397,20 @@ export async function proxyNestRequest(
     if (value) headers.set(name, value)
   }
   headers.set("Authorization", `Bearer ${credentials.accessToken}`)
-  headers.set("Origin", getServerEnv().FRONTEND_ORIGIN)
 
   const body = ["GET", "HEAD"].includes(method)
     ? undefined
-    : requestBody ?? (await request.arrayBuffer())
+    : requestBody ?? (await readBffRequestBody(request)) ?? new ArrayBuffer(0)
 
-  const upstream = await fetch(url, {
+  if (body && body.byteLength > MAX_BFF_BODY_BYTES) {
+    throw new BffBodyTooLargeError()
+  }
+
+  const upstream = await fetchNest(`${encodedPath}${query}`, {
     method,
     headers,
     body,
-    redirect: "manual",
-    cache: "no-store",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  })
+  }, false)
 
   if (upstream.status >= 300 && upstream.status < 400) {
     await upstream.body?.cancel()

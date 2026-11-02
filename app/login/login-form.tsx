@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState } from "react"
+import { useMutation } from "@tanstack/react-query"
+import { useRouter } from "next/navigation"
 import { Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,7 +9,15 @@ import { Label } from "@/components/ui/label"
 import { loginAction } from "@/app/login/actions"
 
 export function LoginForm() {
-  const [error, action, pending] = useActionState(loginAction, null)
+  const router = useRouter()
+  const loginMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      const result = await loginAction(formData)
+      if ("error" in result) throw new Error(result.error)
+      return result.redirectTo
+    },
+    onSuccess: (redirectTo) => router.replace(redirectTo),
+  })
 
   return (
     <div className="app-bg flex min-h-screen items-center justify-center px-4">
@@ -25,7 +34,13 @@ export function LoginForm() {
           </div>
         </div>
 
-        <form action={action} className="space-y-4 rounded-2xl border bg-white p-6">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            loginMutation.mutate(new FormData(event.currentTarget))
+          }}
+          className="space-y-4 rounded-2xl border bg-white p-6"
+        >
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -50,13 +65,17 @@ export function LoginForm() {
               className="h-10 rounded-xl"
             />
           </div>
-          {error && (
+          {loginMutation.error && (
             <p role="alert" className="text-sm text-red-600">
-              {error}
+              {loginMutation.error.message}
             </p>
           )}
-          <Button type="submit" disabled={pending} className="h-10 w-full rounded-xl">
-            {pending ? "Signing in…" : "Sign in"}
+          <Button
+            type="submit"
+            disabled={loginMutation.isPending || loginMutation.isSuccess}
+            className="h-10 w-full rounded-xl"
+          >
+            {loginMutation.isPending || loginMutation.isSuccess ? "Signing in…" : "Sign in"}
           </Button>
         </form>
       </div>

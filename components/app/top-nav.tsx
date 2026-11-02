@@ -2,8 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { useTransition } from "react"
-import { useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Check, ChevronDown, LogOut, Settings, Sparkles, User } from "lucide-react"
 import { toast } from "sonner"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -43,21 +42,32 @@ export function TopNav() {
   const router = useRouter()
   const settingsActive = isWithin(pathname, "/settings")
   const queryClient = useQueryClient()
-  const [isSigningOut, startTransition] = useTransition()
-
-  function handleSignOut() {
-    clearAuthQueryCache(queryClient)
-    startTransition(() => {
-      void fetch("/api/session/signout", {
+  const signOutMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/session/signout", {
         method: "POST",
         credentials: "same-origin",
       })
-        .then((response) => {
-          if (!response.ok) throw new Error("Sign out failed")
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => null)
+        if (error?.code === "LOGOUT_UNCONFIRMED" || error?.code === "SESSION_REPLACED") {
+          // These responses confirm local sign-out, even if Nest revocation was not confirmed.
+          clearAuthQueryCache(queryClient)
           router.replace("/login")
-        })
-        .catch(() => toast.error("Could not complete sign out. Please try again."))
-    })
+        }
+        throw new Error("Sign out failed")
+      }
+    },
+    onSuccess: () => {
+      clearAuthQueryCache(queryClient)
+      router.replace("/login")
+    },
+    onError: () => toast.error("Could not complete sign out. Please try again."),
+  })
+
+  function handleSignOut() {
+    signOutMutation.mutate()
   }
 
   return (
@@ -119,7 +129,7 @@ export function TopNav() {
               <Settings /> Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut} disabled={isSigningOut}>
+            <DropdownMenuItem onClick={handleSignOut} disabled={signOutMutation.isPending}>
               <LogOut /> Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>

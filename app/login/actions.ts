@@ -5,21 +5,23 @@ import { AuthError } from "next-auth"
 import { signIn } from "@/auth"
 
 export async function loginAction(
-  _previousError: string | null,
   formData: FormData,
-): Promise<string | null> {
+): Promise<{ redirectTo: string } | { error: string }> {
   try {
-    await signIn("credentials", {
+    const redirectTo = await signIn("credentials", {
       email: String(formData.get("email") ?? ""),
       password: String(formData.get("password") ?? ""),
       redirectTo: "/dashboard",
+      redirect: false,
     })
+
+    return {
+      redirectTo: typeof redirectTo === "string" ? redirectTo : "/dashboard",
+    }
   } catch (error) {
     if (error instanceof AuthError) {
-      return "Sign in failed. Check your credentials or try again later."
+      return { error: "Sign in failed. Check your credentials or try again later." }
     }
     throw error
   }
-
-  return null
 }

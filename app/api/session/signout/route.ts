@@ -1,8 +1,8 @@
 import { signOut } from "@/auth"
-import { refreshManager } from "@/lib/server/refresh-manager"
+import { endBackendSession } from "@/lib/server/refresh-manager"
 import { backendCredentialsFromRequest } from "@/lib/server/auth-session"
 import { getServerEnv } from "@/lib/server/env"
-import { logoutWithNest, NestApiError } from "@/lib/server/nest-api"
+import { NestApiError } from "@/lib/server/nest-api"
 
 export const runtime = "nodejs"
 
@@ -15,49 +15,19 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const credentials = await backendCredentialsFromRequest(request)
-  let backendSessionRejected = false
-
   if (credentials) {
     try {
-      await refreshManager.runSessionTransition(
-        credentials.authSessionId,
-        async (latest) => {
-          let current = latest ?? credentials
-
-          if (current.accessTokenExpiresAt <= Date.now() + 30_000) {
-            current = await refreshManager.refresh(current, true)
-          }
-
-          try {
-            await logoutWithNest(current)
-          } catch (error) {
-            if (!(error instanceof NestApiError) || error.status !== 401) {
-              throw error
-            }
-
-            try {
-              current = await refreshManager.refresh(current, true)
-            } catch (refreshError) {
-              if (refreshError instanceof NestApiError && refreshError.status === 401) {
-                backendSessionRejected = true
-                return
-              }
-
-              throw refreshError
-            }
-
-            await logoutWithNest(current)
-          }
-
-          refreshManager.invalidate(
-            credentials.authSessionId,
-            current.accessTokenExpiresAt + 60_000,
-          )
-        },
-        credentials,
-      )
+      if (!await endBackendSession(credentials)) {
+        await signOut({ redirect: false })
+        return Response.json(
+          { statusCode: 409, code: "SESSION_REPLACED", message: "Session changed" },
+          { status: 409 },
+        )
+      }
     } catch (error) {
       if (!(error instanceof NestApiError && error.status === 401)) {
+        // Remote revocation is uncertain, but local credentials must not survive.
+        await signOut({ redirect: false })
         console.error("Backend logout could not be confirmed", {
           status: error instanceof NestApiError ? error.status : undefined,
         })
@@ -71,18 +41,6 @@ export async function POST(request: Request): Promise<Response> {
           { status: 503 },
         )
       }
-
-      backendSessionRejected = true
-    }
-
-    if (
-      backendSessionRejected &&
-      !refreshManager.isInvalidated(credentials.authSessionId)
-    ) {
-      refreshManager.invalidate(
-        credentials.authSessionId,
-        credentials.accessTokenExpiresAt + 60_000,
-      )
     }
   }
 

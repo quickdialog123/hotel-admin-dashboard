@@ -90,6 +90,8 @@ Auth.js session lifetime is set to 30 days to match Nest's default `AUTH_SESSION
 
 The initial deployment assumes one persistent Next.js Node process. Process-local refresh coordination does not coordinate horizontally scaled or serverless instances; deploy the BFF as a single process until shared refresh coordination is added. If a refresh outcome is uncertain, the frontend session fails closed and the user must sign in again; Nest may retain an unknown replacement refresh session until its configured expiry. Nest access JWTs are stateless and remain accepted until their short expiry, even after refresh-session logout. The process-local invalidation guard is lost on restart, so immediate revocation across restarts/instances requires backend session checks or shared state.
 
+The MVP coordinator keeps one active refresh and one recent result per frontend session. For 60 seconds, only the immediately previous cookie generation can recover that result; older cookies are rejected locally with `409 SESSION_REPLACED`, without replaying a consumed token to Nest. Logout blocks new refreshes and waits for any active rotation before revoking the latest backend session. If revocation fails, the local session is invalidated and its Auth.js cookie is cleared, while the endpoint returns `503 LOGOUT_UNCONFIRMED`; remote revocation may remain unconfirmed. These fail-closed cases can require signing in again.
+
 Run focused auth checks with `npm run test:auth` (needs Node ≥ 22.6 for `--experimental-strip-types`). The HTTP integration test starts the built Next.js app and a mock Nest API: build first with the auth environment above (`npm run build`), then run `npm run test:auth:integration`.
 
 ## Design notes

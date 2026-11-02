@@ -1,5 +1,14 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { z } from "zod"
+import type { BackendCredentials } from "@/lib/auth/refresh-coordinator"
+
+export function backendCredentialsMatch(
+  actual: BackendCredentials | null,
+  expected: BackendCredentials,
+): boolean {
+  return actual !== null && (Object.keys(expected) as (keyof BackendCredentials)[])
+    .every((key) => actual[key] === expected[key])
+}
 
 const backendTokenUpdateSchema = z.object({
   authSessionId: z.string().min(1),

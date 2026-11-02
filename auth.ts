@@ -21,7 +21,7 @@ import {
 } from "@/lib/server/auth-session"
 import { getServerEnv } from "@/lib/server/env"
 import { NestApiError, loginWithNest, logoutWithNest } from "@/lib/server/nest-api"
-import { refreshManager } from "@/lib/server/refresh-manager"
+import { endBackendSession, refreshManager } from "@/lib/server/refresh-manager"
 
 export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   secret: process.env.AUTH_SECRET,
@@ -57,28 +57,11 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
           throw new CredentialsSignin()
         }
 
-        if (
-          previousCredentials &&
-          !refreshManager.isInvalidated(previousCredentials.authSessionId)
-        ) {
+        if (previousCredentials) {
           try {
-            await refreshManager.runSessionTransition(
-              previousCredentials.authSessionId,
-              async (latest) => {
-                let previous = latest ?? previousCredentials
-
-                if (previous.accessTokenExpiresAt <= Date.now() + 30_000) {
-                  previous = await refreshManager.refresh(previous, true)
-                }
-
-                await logoutWithNest(previous)
-                refreshManager.invalidate(
-                  previousCredentials.authSessionId,
-                  previous.accessTokenExpiresAt + 60_000,
-                )
-              },
-              previousCredentials,
-            )
+            if (!await endBackendSession(previousCredentials)) {
+              throw new CredentialsSignin()
+            }
           } catch (error) {
             try {
               await logoutWithNest(backendCredentials)
@@ -141,7 +124,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
 
       if (
         typeof token.authSessionId === "string" &&
-        refreshManager.isInvalidated(token.authSessionId)
+        !refreshManager.isActive(token.authSessionId)
       ) {
         return null
       }

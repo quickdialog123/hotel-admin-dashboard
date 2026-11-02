@@ -5,6 +5,7 @@ import { once } from "node:events"
 import { setTimeout as delay } from "node:timers/promises"
 import { join } from "node:path"
 import { test } from "node:test"
+import { encode, getToken } from "next-auth/jwt"
 
 function listen(server) {
   server.listen(0, "127.0.0.1")
@@ -79,8 +80,10 @@ test("Auth.js Credentials + Nest BFF login, refresh, concurrency, protection, an
   let logoutCount = 0
   let protectedRequestCount = 0
   let failRefresh = false
+  let failLogout = false
   let forceUnauthorizedAfterRefresh = false
   let nextHotelResponseGate = null
+  let nextRefreshGate = null
   const sessionsByAccess = new Map()
   const sessionsByRefresh = new Map()
   const frontendPort = await freePort()
@@ -151,6 +154,12 @@ test("Auth.js Credentials + Nest BFF login, refresh, concurrency, protection, an
 
     if (url.pathname === "/api/auth/refresh" && request.method === "POST") {
       refreshCount += 1
+      if (nextRefreshGate) {
+        const gate = nextRefreshGate
+        nextRefreshGate = null
+        gate.started()
+        await gate.wait
+      }
       const refreshToken = request.headers.cookie
         ?.split(";")
         .map((part) => part.trim())
@@ -185,6 +194,10 @@ test("Auth.js Credentials + Nest BFF login, refresh, concurrency, protection, an
     }
 
     if (url.pathname === "/api/auth/logout" && request.method === "POST") {
+      if (failLogout) {
+        responseJson(response, 503, { message: "Unavailable" })
+        return
+      }
       const token = request.headers.authorization?.replace(/^Bearer /, "")
       const refreshToken = request.headers.cookie
         ?.split(";")
@@ -367,6 +380,23 @@ test("Auth.js Credentials + Nest BFF login, refresh, concurrency, protection, an
     headers: { Cookie: cookieHeader(jar) },
   })
   assert.equal(unapprovedUpstreamPath.status, 404)
+  const oversizedRequest = await fetch(appUrl("/api/bff/hotels"), {
+    method: "POST",
+    headers: {
+      Cookie: cookieHeader(jar),
+      Origin: frontendOrigin,
+      "Content-Type": "application/octet-stream",
+    },
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(Buffer.alloc(10 * 1024 * 1024 + 1))
+        controller.close()
+      },
+    }),
+    duplex: "half",
+  })
+  assert.equal(oversizedRequest.status, 413)
+  assert.equal(refreshCount, 0)
   const protectedDashboard = await fetch(appUrl("/dashboard"), { redirect: "manual" })
   assert.ok([302, 303, 307].includes(protectedDashboard.status))
   assert.equal(
@@ -375,6 +405,7 @@ test("Auth.js Credentials + Nest BFF login, refresh, concurrency, protection, an
   )
 
   const sessionCookieBeforeRefresh = authSessionCookie(jar)
+  const staleCookieJar = new Map(jar)
   const firstProtected = await fetch(appUrl("/api/bff/hotels"), {
     headers: { Cookie: cookieHeader(jar) },
   })
@@ -392,6 +423,13 @@ test("Auth.js Credentials + Nest BFF login, refresh, concurrency, protection, an
   assert.equal(refreshCount, 1)
   updateCookieJar(jar, firstProtected)
   assert.notEqual(authSessionCookie(jar), sessionCookieBeforeRefresh)
+  const persistedJwt = await getToken({
+    req: new Request(appUrl("/"), { headers: { Cookie: cookieHeader(jar) } }),
+    secret: "local-test-secret-with-more-than-32-characters",
+    secureCookie: false,
+  })
+  assert.equal(persistedJwt.backendTokenVersion, 1)
+  assert.equal(persistedJwt.backendRefreshToken, "refresh-1-1")
   assert.equal((await firstProtected.json())[0].name, "Test hotel")
   const authenticatedDashboard = await fetch(appUrl("/dashboard"))
   assert.equal(authenticatedDashboard.status, 200)
@@ -400,6 +438,13 @@ test("Auth.js Credentials + Nest BFF login, refresh, concurrency, protection, an
     headers: { Cookie: cookieHeader(jar) },
   })
   assert.equal(subsequentProtected.status, 200)
+  assert.equal(refreshCount, 1)
+
+  const handoff = await fetch(appUrl("/api/bff/hotels"), {
+    headers: { Cookie: cookieHeader(staleCookieJar) },
+  })
+  assert.equal(handoff.status, 200)
+  assert.ok(cookieValues(handoff).some((cookie) => cookie.includes("session-token")))
   assert.equal(refreshCount, 1)
 
   const mutationResponse = await fetch(appUrl("/api/bff/hotels"), {
@@ -417,6 +462,21 @@ test("Auth.js Credentials + Nest BFF login, refresh, concurrency, protection, an
   })
   updateCookieJar(jar, mutationResponse)
   assert.equal(refreshCount, 2)
+
+  const tooStale = await fetch(appUrl("/api/bff/hotels"), {
+    headers: { Cookie: cookieHeader(staleCookieJar) },
+  })
+  assert.equal(tooStale.status, 409)
+  assert.equal(refreshCount, 2)
+  assert.equal((await session(jar)).user.userId, publicSession.user.userId)
+  const staleLogout = await fetch(appUrl("/api/session/signout"), {
+    method: "POST",
+    headers: { Cookie: cookieHeader(staleCookieJar), Origin: frontendOrigin },
+  })
+  assert.equal(staleLogout.status, 409)
+  updateCookieJar(staleCookieJar, staleLogout)
+  assert.equal(authSessionCookie(staleCookieJar), "")
+  assert.equal((await session(jar)).user.userId, publicSession.user.userId)
 
   let releaseDelayedResponse
   let startedDelayedResponse
@@ -504,4 +564,127 @@ test("Auth.js Credentials + Nest BFF login, refresh, concurrency, protection, an
   updateCookieJar(logoutJar, logoutResponse)
   assert.equal((await session(logoutJar))?.user, undefined)
   assert.equal(logoutCount, 2)
+
+  const racingJar = new Map()
+  await login(racingJar, "racing-logout@example.com")
+  let releaseRefresh
+  let signalRefreshStarted
+  const refreshStarted = new Promise((resolve) => { signalRefreshStarted = resolve })
+  nextRefreshGate = {
+    started: signalRefreshStarted,
+    wait: new Promise((resolve) => { releaseRefresh = resolve }),
+  }
+  const racingRequest = fetch(appUrl("/api/bff/hotels"), {
+    headers: { Cookie: cookieHeader(racingJar) },
+  })
+  await refreshStarted
+  const racingLogout = fetch(appUrl("/api/session/signout"), {
+    method: "POST",
+    headers: { Cookie: cookieHeader(racingJar), Origin: frontendOrigin },
+  })
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (!(await session(racingJar))?.user) break
+    await delay(10)
+  }
+  assert.equal((await session(racingJar))?.user, undefined)
+  releaseRefresh()
+  const [raceResponse, raceLogout] = await Promise.all([racingRequest, racingLogout])
+  assert.equal(raceResponse.status, 409)
+  assert.equal(raceLogout.status, 204)
+  updateCookieJar(racingJar, raceLogout)
+  assert.equal((await session(racingJar))?.user, undefined)
+  assert.equal(logoutCount, 3)
+
+  const delayedRetryJar = new Map()
+  await login(delayedRetryJar, "delayed-retry@example.com")
+  let releaseRotation
+  let rotationStarted
+  const rotationReady = new Promise((resolve) => { rotationStarted = resolve })
+  nextRefreshGate = {
+    started: rotationStarted,
+    wait: new Promise((resolve) => { releaseRotation = resolve }),
+  }
+  const delayedRetryRequest = fetch(appUrl("/api/bff/hotels"), {
+    headers: { Cookie: cookieHeader(delayedRetryJar) },
+  })
+  await rotationReady
+  let releaseRetry
+  let retryStarted
+  const retryReady = new Promise((resolve) => { retryStarted = resolve })
+  nextHotelResponseGate = {
+    started: retryStarted,
+    wait: new Promise((resolve) => { releaseRetry = resolve }),
+  }
+  releaseRotation()
+  await retryReady
+  const logoutDuringRetry = await fetch(appUrl("/api/session/signout"), {
+    method: "POST",
+    headers: { Cookie: cookieHeader(delayedRetryJar), Origin: frontendOrigin },
+  })
+  assert.equal(logoutDuringRetry.status, 204)
+  updateCookieJar(delayedRetryJar, logoutDuringRetry)
+  releaseRetry()
+  const delayedRetryResponse = await delayedRetryRequest
+  assert.equal(delayedRetryResponse.status, 409)
+  updateCookieJar(delayedRetryJar, delayedRetryResponse)
+  assert.equal(authSessionCookie(delayedRetryJar), "")
+  assert.equal((await session(delayedRetryJar))?.user, undefined)
+
+  const failedLogoutJar = new Map()
+  await login(failedLogoutJar, "failed-logout@example.com")
+  failLogout = true
+  const failedLogout = await fetch(appUrl("/api/session/signout"), {
+    method: "POST",
+    headers: { Cookie: cookieHeader(failedLogoutJar), Origin: frontendOrigin },
+  })
+  assert.equal(failedLogout.status, 503)
+  updateCookieJar(failedLogoutJar, failedLogout)
+  assert.equal(authSessionCookie(failedLogoutJar), "")
+  assert.equal((await session(failedLogoutJar))?.user, undefined)
+  failLogout = false
+
+  // Exercise the actual persistence failure path: the incoming encrypted cookie
+  // is readable at admission but expires while Nest is rotating its credentials.
+  const expiryJar = new Map()
+  await login(expiryJar, "persistence-failure@example.com")
+  const expiryRequest = () => new Request(appUrl("/"), {
+    headers: { Cookie: cookieHeader(expiryJar) },
+  })
+  const token = await getToken({
+    req: expiryRequest(),
+    secret: "local-test-secret-with-more-than-32-characters",
+    secureCookie: false,
+  })
+  const cookieName = [...expiryJar.keys()].find((name) => name.includes("session-token"))
+  // Auth.js allows 15 seconds of clock tolerance; this gives five seconds to
+  // admit the request, then expires within the backend's 12-second timeout.
+  expiryJar.set(cookieName, await encode({
+    token,
+    salt: cookieName,
+    secret: "local-test-secret-with-more-than-32-characters",
+    maxAge: -10,
+  }))
+  assert.ok(await getToken({
+    req: expiryRequest(),
+    secret: "local-test-secret-with-more-than-32-characters",
+    secureCookie: false,
+  }))
+  let releaseExpiryRefresh
+  let expiryRefreshStarted
+  const expiryReady = new Promise((resolve) => { expiryRefreshStarted = resolve })
+  nextRefreshGate = {
+    started: expiryRefreshStarted,
+    wait: new Promise((resolve) => { releaseExpiryRefresh = resolve }),
+  }
+  const cannotPersist = fetch(appUrl("/api/bff/hotels"), {
+    headers: { Cookie: cookieHeader(expiryJar) },
+  })
+  await expiryReady
+  await delay(6_000)
+  releaseExpiryRefresh()
+  const persistenceFailure = await cannotPersist
+  assert.equal(persistenceFailure.status, 401)
+  assert.equal((await persistenceFailure.json()).code, "SESSION_EXPIRED")
+  updateCookieJar(expiryJar, persistenceFailure)
+  assert.equal((await session(expiryJar))?.user, undefined)
 })

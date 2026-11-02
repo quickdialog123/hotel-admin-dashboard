@@ -1,11 +1,11 @@
 import { signOut, unstable_update } from "@/auth"
-import {
-  AUTH_SESSION_MAX_AGE_MS,
-  type BackendCredentials,
-} from "@/lib/auth/refresh-coordinator"
+import { cookies } from "next/headers"
+import type { BackendCredentials } from "@/lib/auth/refresh-coordinator"
+import { backendCredentialsMatch } from "@/lib/auth/token-update"
 import { refreshManager } from "@/lib/server/refresh-manager"
 import {
   backendCredentialsFromRequest,
+  backendCredentialsFromHeaders,
   signedBackendCredentialUpdate,
 } from "@/lib/server/auth-session"
 import { getServerEnv } from "@/lib/server/env"
@@ -26,12 +26,7 @@ type RouteContext = {
 async function endFrontendSession(
   credentials: BackendCredentials,
 ): Promise<void> {
-  if (refreshManager.isInvalidated(credentials.authSessionId)) return
-
-  refreshManager.invalidate(
-    credentials.authSessionId,
-    Date.now() + AUTH_SESSION_MAX_AGE_MS,
-  )
+  refreshManager.invalidate(credentials.authSessionId)
 
   try {
     await signOut({ redirect: false })
@@ -66,23 +61,26 @@ function upstreamUnavailableResponse(): Response {
 }
 
 async function persistBackendCredentials(
-  current: BackendCredentials,
   next: BackendCredentials,
 ): Promise<boolean> {
   try {
-    const session = await refreshManager.runSessionTransition(
-      current.authSessionId,
-      async () => {
-        if (refreshManager.isInvalidated(current.authSessionId)) return null
-
-        return unstable_update({
-          backendTokenUpdate: signedBackendCredentialUpdate(current, next),
-        } as never)
-      },
-      current,
-    )
-
-    return session !== null
+    if (!refreshManager.isActive(next.authSessionId)) return false
+    const cookieStore = await cookies()
+    const current = await backendCredentialsFromHeaders(new Headers({ Cookie: cookieStore.toString() }))
+    if (!current || current.authSessionId !== next.authSessionId) return false
+    if (!backendCredentialsMatch(current, next)) {
+      if (current.tokenVersion + 1 !== next.tokenVersion) return false
+      const session = await unstable_update({
+        backendTokenUpdate: signedBackendCredentialUpdate(current, next),
+      } as never)
+      if (!session) return false
+    }
+    const persisted = await backendCredentialsFromHeaders(new Headers({ Cookie: cookieStore.toString() }))
+    if (!refreshManager.isActive(next.authSessionId)) {
+      await signOut({ redirect: false })
+      return false
+    }
+    return backendCredentialsMatch(persisted, next)
   } catch {
     return false
   }
@@ -92,7 +90,7 @@ async function getStableCredentials(
   credentials: BackendCredentials,
 ): Promise<BackendCredentials | null> {
   try {
-    return await refreshManager.waitForTransition(credentials)
+    return await refreshManager.resolve(credentials)
   } catch {
     return null
   }
@@ -167,30 +165,21 @@ async function handle(
 
   const latestAfterRequest = await getStableCredentials(credentials)
   if (!latestAfterRequest) return replacedSessionResponse()
+  credentials = latestAfterRequest
 
-  if (latestAfterRequest.tokenVersion > credentials.tokenVersion) {
-    const persisted = await persistBackendCredentials(credentials, latestAfterRequest)
-
-    if (!persisted) {
-      if (refreshManager.isInvalidated(credentials.authSessionId)) {
-        return replacedSessionResponse()
+  if (response.status === 401) {
+    if (credentials.tokenVersion === requestTokenVersion) {
+      try {
+        const refreshed = await refreshManager.refresh(credentials)
+        if (!refreshed) return replacedSessionResponse()
+        credentials = refreshed
+      } catch {
+        await endFrontendSession(credentials)
+        return sessionExpiredResponse()
       }
-
-      await endFrontendSession(credentials)
-      return sessionExpiredResponse()
     }
 
-    const latestAfterPersistence = await getStableCredentials(latestAfterRequest)
-    if (!latestAfterPersistence) return replacedSessionResponse()
-    credentials = latestAfterPersistence
-  } else {
-    credentials = latestAfterRequest
-  }
-
-  if (
-    response.status === 401 &&
-    credentials.tokenVersion > requestTokenVersion
-  ) {
+    const retryTokenVersion = credentials.tokenVersion
     try {
       response = await proxyNestRequest(request, path, credentials, body)
     } catch (error) {
@@ -204,82 +193,32 @@ async function handle(
       return upstreamUnavailableResponse()
     }
 
-    const afterLateRetry = await getStableCredentials(credentials)
-    if (!afterLateRetry) return replacedSessionResponse()
+    const latestAfterRetry = await getStableCredentials(credentials)
+    if (!latestAfterRetry) return replacedSessionResponse()
+    credentials = latestAfterRetry
 
     if (response.status === 401) {
-      if (afterLateRetry.tokenVersion > credentials.tokenVersion) {
-        return replacedSessionResponse()
-      }
-
-      await endFrontendSession(afterLateRetry)
+      if (credentials.tokenVersion > retryTokenVersion) return replacedSessionResponse()
+      await endFrontendSession(credentials)
       return sessionExpiredResponse()
     }
-
-    return response
   }
 
-  if (response.status !== 401) return response
+  if (credentials.tokenVersion > authCredentials.tokenVersion + 1) {
+    // The operation already ran: do not turn a successful mutation into a retryable error.
+    // Its old cookie will be rejected locally on the next request.
+    return response.ok ? response : replacedSessionResponse()
+  }
 
-  let refreshed: BackendCredentials
-
-  try {
-    refreshed =
-      refreshManager.getRecent(
-        credentials.authSessionId,
-        credentials.tokenVersion,
-      ) ?? (await refreshManager.refresh(credentials))
-  } catch {
-    if (
-      refreshManager.isInvalidated(credentials.authSessionId) ||
-      refreshManager.isTransitioning(credentials.authSessionId)
-    ) {
-      return replacedSessionResponse()
+  if (credentials.tokenVersion > authCredentials.tokenVersion) {
+    if (!await persistBackendCredentials(credentials)) {
+      if (!refreshManager.isActive(credentials.authSessionId)) return replacedSessionResponse()
+      await endFrontendSession(credentials)
+      return sessionExpiredResponse()
     }
-
-    await endFrontendSession(credentials)
-    return sessionExpiredResponse()
   }
 
-  const persisted = await persistBackendCredentials(credentials, refreshed)
-
-  if (!persisted) {
-    if (refreshManager.isInvalidated(credentials.authSessionId)) {
-      return replacedSessionResponse()
-    }
-
-    await endFrontendSession(credentials)
-    return sessionExpiredResponse()
-  }
-
-  let retryResponse: Response
-
-  try {
-    retryResponse = await proxyNestRequest(request, path, refreshed, body)
-  } catch (error) {
-    if (error instanceof NestResponseTooLargeError) {
-      return Response.json(
-        { statusCode: 502, code: "BACKEND_RESPONSE_TOO_LARGE", message: "Backend response too large" },
-        { status: 502 },
-      )
-    }
-
-    return upstreamUnavailableResponse()
-  }
-
-  const latestAfterRetry = await getStableCredentials(refreshed)
-  if (!latestAfterRetry) return replacedSessionResponse()
-
-  if (retryResponse.status === 401) {
-    if (latestAfterRetry.tokenVersion > refreshed.tokenVersion) {
-      return replacedSessionResponse()
-    }
-
-    await endFrontendSession(latestAfterRetry)
-    return sessionExpiredResponse()
-  }
-
-  return retryResponse
+  return response
 }
 
 export const GET = handle
