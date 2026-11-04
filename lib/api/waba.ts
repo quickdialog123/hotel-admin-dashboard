@@ -11,6 +11,7 @@ export const wabaConnectionSchema =
   z.object({
     status: z.enum([
       "connected",
+      "unverified",
       "not_connected",
       "error",
     ]),
@@ -42,6 +43,10 @@ export const embeddedSignupInputSchema = z.object({
   code: z.string().min(1),
   wabaId: z.string().min(1),
   phoneNumberId: z.string().min(1),
+})
+
+export const whatsappPinInputSchema = z.object({
+  pin: z.string().regex(/^\d{6}$/, "Enter a valid 6-digit PIN"),
 })
 
 export type CompleteSignupInput = z.infer<typeof embeddedSignupInputSchema>
@@ -76,6 +81,17 @@ export function completeWabaSignup(
     input,
     wabaConnectionSchema,
     embeddedSignupInputSchema,
+  )
+}
+
+export function registerWaba(pin: string) {
+  const input = whatsappPinInputSchema.parse({ pin })
+
+  return postJson(
+    "whatsapp/register",
+    input,
+    wabaConnectionSchema,
+    whatsappPinInputSchema,
   )
 }
 
