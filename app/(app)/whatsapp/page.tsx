@@ -86,9 +86,9 @@ export default function WhatsAppPage() {
           connection,
         )
 
-        toast.success(
-          "WhatsApp connected",
-        )
+        toast.success(connection.status === "connected"
+          ? "WhatsApp connected"
+          : "WhatsApp added. Verify your account to finish connecting.")
       },
 
       onError: (error) => {
@@ -217,7 +217,7 @@ export default function WhatsAppPage() {
               </div>
 
               <div className="flex gap-2">
-                {data.status ===
+              {data.status ===
                 "connected" ? (
                   <>
                     <Button
@@ -305,6 +305,12 @@ export default function WhatsAppPage() {
                 your AI receptionist
                 as soon as it&apos;s
                 connected.
+              </p>
+            )}
+
+            {data.status === "unverified" && (
+              <p className="mt-6 max-w-xl text-sm text-muted-foreground">
+                Your WhatsApp account was added. Enter its six-digit PIN to finish connecting.
               </p>
             )}
 
@@ -400,6 +406,7 @@ export default function WhatsAppPage() {
           await disconnectMutation.mutateAsync()
         }}
       />
+
     </>
   )
 }

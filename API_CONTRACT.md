@@ -278,7 +278,7 @@ export type NotificationPreferences = {
 ## `waba.ts`
 ### Types
 ```ts
-export type WabaConnectionStatus = "connected" | "not_connected" | "error"
+export type WabaConnectionStatus = "connected" | "unverified" | "not_connected" | "error"
 
 export type WabaConnection = {
   status: WabaConnectionStatus
@@ -304,7 +304,9 @@ export type WabaDashboardStats = {
 ```
 ### Functions
 - `getWabaConnection(): Promise<WabaConnection>`
-- `connectWaba(): Promise<WabaConnection>` — TODO(backend): replace with Meta Embedded Signup — the real flow returns a code that the backend exchanges for a WABA + phone number.
+- `completeWabaSignup(input): Promise<WabaConnection>` — `POST /api/whatsapp/embedded-signup/complete`; exchanges the Embedded Signup result and may return `unverified`.
+- `registerWaba(pin): Promise<WabaConnection>` — `POST /api/whatsapp/register` with `{ "pin": "123456" }`; uses the authenticated user session.
+- `getWabaConnection(): Promise<WabaConnection>` — `GET /api/whatsapp/status`.
 - `disconnectWaba(): Promise<WabaConnection>`
 - `simulateWabaError(): Promise<WabaConnection>`
 - `getDashboardStats(): Promise<WabaDashboardStats>`
