@@ -67,3 +67,81 @@ export async function updateCatalogueItemsCategory(ids: string[], category: stri
   items = items.map((i) => (ids.includes(i.id) ? { ...i, category, updatedAt: new Date().toISOString() } : i))
   return delay(undefined)
 }
+
+// Append these exports at the END of your existing lib/api/catalogue.ts.
+// This is a frontend-only simulator. Replace these functions with real API calls later.
+
+export type WhatsAppCatalog = { id: string; name: string }
+
+const EXISTING_CATALOG_ID = "meta_catalog_hotel_001"
+const mockCatalogs: WhatsAppCatalog[] = [
+  { id: EXISTING_CATALOG_ID, name: "Hotel Services" },
+  { id: "meta_catalog_spa_002", name: "Spa & Wellness" },
+]
+
+// Start with NO catalog connected to demonstrate the onboarding empty state.
+// Change to EXISTING_CATALOG_ID to start with the products grid instead.
+let activeCatalogId: string | null = null
+let loadedProductCatalogId = EXISTING_CATALOG_ID
+const productsByCatalog = new Map<string, CatalogueItem[]>([
+  [EXISTING_CATALOG_ID, clone(items)],
+  ["meta_catalog_spa_002", []],
+])
+
+function storeCurrentItems() {
+  productsByCatalog.set(loadedProductCatalogId, clone(items))
+}
+
+function loadCatalogItems(catalogId: string) {
+  storeCurrentItems()
+  items = clone(productsByCatalog.get(catalogId) ?? [])
+  loadedProductCatalogId = catalogId
+}
+
+export async function getActiveWhatsAppCatalog(): Promise<WhatsAppCatalog | null> {
+  return delay(clone(mockCatalogs.find((c) => c.id === activeCatalogId) ?? null))
+}
+
+export async function listAvailableWhatsAppCatalogs(): Promise<WhatsAppCatalog[]> {
+  return delay(clone(mockCatalogs))
+}
+
+export async function createWhatsAppCatalog(name: string): Promise<WhatsAppCatalog> {
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error("Catalog name is required")
+  if (mockCatalogs.some((catalog) => catalog.name.toLowerCase() === trimmed.toLowerCase())) {
+    throw new Error("A catalog with this name already exists")
+  }
+  const catalog = { id: newId("meta_catalog"), name: trimmed }
+  mockCatalogs.push(catalog)
+  productsByCatalog.set(catalog.id, [])
+  return delay(clone(catalog))
+}
+
+export async function connectWhatsAppCatalog(id: string): Promise<WhatsAppCatalog> {
+  const catalog = mockCatalogs.find((c) => c.id === id)
+  if (!catalog) throw new Error("Catalog not found")
+  loadCatalogItems(id)
+  activeCatalogId = id
+  return delay(clone(catalog))
+}
+
+export async function disconnectWhatsAppCatalog(): Promise<void> {
+  storeCurrentItems()
+  activeCatalogId = null
+  return delay(undefined)
+}
+
+export async function deleteActiveWhatsAppCatalog(): Promise<void> {
+  if (!activeCatalogId) throw new Error("No connected catalog")
+  const id = activeCatalogId
+  storeCurrentItems()
+  const index = mockCatalogs.findIndex((c) => c.id === id)
+  if (index !== -1) mockCatalogs.splice(index, 1)
+  productsByCatalog.delete(id)
+  activeCatalogId = null
+  items = []
+  loadedProductCatalogId = ""
+  return delay(undefined)
+}
+

@@ -1,8 +1,9 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Check, LayoutGrid, List, Plus, Trash2, Utensils } from "lucide-react"
+import { Check, LayoutGrid, List, Plus, Trash2, Utensils, Link2, Unplug, ShoppingBag } from "lucide-react"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { PageHeader } from "@/components/app/page-header"
 import { PillSelect } from "@/components/app/pill-select"
@@ -20,8 +21,18 @@ import {
   updateCatalogueItem,
   updateCatalogueItemsCategory,
   type CatalogueItem,
+  getActiveWhatsAppCatalog,
+  listAvailableWhatsAppCatalogs,
+  createWhatsAppCatalog,
+  connectWhatsAppCatalog,
+  disconnectWhatsAppCatalog,
+  deleteActiveWhatsAppCatalog,
 } from "@/lib/api/catalogue"
-import { useAsync } from "@/lib/hooks/use-async"
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { formatPrice } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
@@ -33,7 +44,96 @@ function StatusBadge({ status }: { status: CatalogueItem["status"] }) {
 }
 
 export default function CataloguePage() {
-  const { data, error, loading, reload } = useAsync(listCatalogueItems)
+  const queryClient = useQueryClient()
+  const [setupDialog, setSetupDialog] = useState<"connect" | "create" | null>(null)
+  const [catalogName, setCatalogName] = useState("")
+  const [selectedCatalogId, setSelectedCatalogId] = useState("")
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false)
+  const [confirmDeleteCatalog, setConfirmDeleteCatalog] = useState(false)
+
+  const catalogQuery = useQuery({
+    queryKey: ["whatsapp", "catalog"],
+    queryFn: getActiveWhatsAppCatalog,
+  })
+  const activeCatalog = catalogQuery.data
+  const catalogId = activeCatalog?.id
+
+  const availableQuery = useQuery({
+    queryKey: ["whatsapp", "catalogs", "available"],
+    queryFn: listAvailableWhatsAppCatalogs,
+    enabled: setupDialog === "connect",
+  })
+
+  const productsQuery = useQuery({
+    queryKey: ["whatsapp", "catalog", catalogId, "products"],
+    queryFn: listCatalogueItems,
+    enabled: !!catalogId,
+  })
+
+  const data = catalogId ? productsQuery.data : undefined
+  const error = productsQuery.error
+  const loading = productsQuery.isPending
+
+  async function refreshCatalog() {
+    await queryClient.invalidateQueries({ queryKey: ["whatsapp", "catalog"] })
+  }
+  async function refreshProducts() {
+    await queryClient.invalidateQueries({ queryKey: ["whatsapp", "catalog", catalogId, "products"] })
+  }
+
+  const createCatalogMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const created = await createWhatsAppCatalog(name)
+      await connectWhatsAppCatalog(created.id)
+      return created
+    },
+    onSuccess: async () => {
+      setSetupDialog(null)
+      setCatalogName("")
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp"] })
+      toast.success("Catalog created and connected")
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Couldn't create catalog"),
+  })
+  const connectMutation = useMutation({
+    mutationFn: connectWhatsAppCatalog,
+    onSuccess: async () => {
+      setSetupDialog(null)
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp"] })
+      toast.success("Catalog connected")
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Couldn't connect catalog"),
+  })
+  const disconnectMutation = useMutation({
+    mutationFn: disconnectWhatsAppCatalog,
+    onSuccess: async () => {
+      setSelected(new Set())
+      await refreshCatalog()
+      toast.success("Catalog disconnected — products are kept")
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Couldn't disconnect catalog"),
+  })
+  const deleteCatalogMutation = useMutation({
+    mutationFn: deleteActiveWhatsAppCatalog,
+    onSuccess: async () => {
+      setSelected(new Set())
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp"] })
+      toast.success("Catalog deleted")
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Couldn't delete catalog"),
+  })
+
+  const createItemMutation = useMutation({ mutationFn: createCatalogueItem, onSuccess: refreshProducts })
+  const updateItemMutation = useMutation({
+    mutationFn: ({ id, draft }: { id: string; draft: ItemDraft }) => updateCatalogueItem(id, draft),
+    onSuccess: refreshProducts,
+  })
+  const deleteItemsMutation = useMutation({ mutationFn: deleteCatalogueItems, onSuccess: refreshProducts })
+  const changeCategoryMutation = useMutation({
+    mutationFn: ({ ids, category }: { ids: string[]; category: string }) => updateCatalogueItemsCategory(ids, category),
+    onSuccess: refreshProducts,
+  })
+
   const [category, setCategory] = useState("all")
   const [status, setStatus] = useState("all")
   const [sort, setSort] = useState<Sort>("updated")
@@ -42,6 +142,12 @@ export default function CataloguePage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<CatalogueItem | null>(null)
   const [deleting, setDeleting] = useState<string[] | null>(null)
+
+  useEffect(() => {
+    setSelected(new Set())
+    setEditing(null)
+    setFormOpen(false)
+  }, [catalogId])
 
   const items = useMemo(() => {
     const rows = (data ?? []).filter((i) => (category === "all" || i.category === category) && (status === "all" || i.status === status))
@@ -68,10 +174,9 @@ export default function CataloguePage() {
   }
   async function save(draft: ItemDraft) {
     try {
-      if (editing) await updateCatalogueItem(editing.id, draft)
-      else await createCatalogueItem(draft)
+      if (editing) await updateItemMutation.mutateAsync({ id: editing.id, draft })
+      else await createItemMutation.mutateAsync(draft)
       toast.success(editing ? "Item updated" : "Item added")
-      reload()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't save item")
       throw e
@@ -99,7 +204,39 @@ export default function CataloguePage() {
 
   return (
     <>
-      <PageHeader title="Catalogue" description="Room service items that sync to your WhatsApp Catalogue." />
+      <PageHeader title="Catalogue" description="Manage products in your connected WhatsApp catalogue." />
+
+      {catalogQuery.isPending ? (
+        <CardGridSkeleton />
+      ) : catalogQuery.isError ? (
+        <ErrorState
+          message={catalogQuery.error instanceof Error ? catalogQuery.error.message : "Couldn't load catalog"}
+          onRetry={() => void catalogQuery.refetch()}
+        />
+      ) : !activeCatalog ? (
+        <EmptyState
+          icon={<ShoppingBag className="size-5" />}
+          title="Connect your WhatsApp catalog"
+          description="Choose an existing Meta catalog or create a new one to manage its products."
+          action={
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button variant="outline" onClick={() => setSetupDialog("connect")}><Link2 /> Connect existing</Button>
+              <Button onClick={() => setSetupDialog("create")}><Plus /> Create catalog</Button>
+            </div>
+          }
+        />
+      ) : (
+      <>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white p-4">
+        <div>
+          <p className="font-semibold">{activeCatalog.name}</p>
+          <p className="text-sm text-muted-foreground">Connected to WhatsApp</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setConfirmDisconnect(true)}><Unplug /> Disconnect</Button>
+          <Button variant="destructive" onClick={() => setConfirmDeleteCatalog(true)}><Trash2 /> Delete catalog</Button>
+        </div>
+      </div>
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <PillSelect label="Filter by category" value={category} onChange={setCategory} options={[{ value: "all", label: "All categories" }, ...CATALOGUE_CATEGORIES.map((c) => ({ value: c, label: c }))]} />
@@ -126,10 +263,9 @@ export default function CataloguePage() {
                     key={c}
                     className="rounded-xl"
                     onClick={async () => {
-                      await updateCatalogueItemsCategory([...selected], c)
+                      await changeCategoryMutation.mutateAsync({ ids: [...selected], category: c })
                       toast.success(`Moved ${selected.size} item${selected.size > 1 ? "s" : ""} to ${c}`)
                       setSelected(new Set())
-                      reload()
                     }}
                   >
                     {c}
@@ -148,7 +284,7 @@ export default function CataloguePage() {
       )}
 
       {error ? (
-        <ErrorState message={error} onRetry={reload} />
+        <ErrorState message={error instanceof Error ? error.message : "Couldn't load products"} onRetry={() => void productsQuery.refetch()} />
       ) : loading || !data ? (
         <CardGridSkeleton />
       ) : data.length === 0 ? (
@@ -207,6 +343,72 @@ export default function CataloguePage() {
         </ul>
       )}
 
+      </>
+      )}
+
+      <Dialog open={setupDialog === "connect"} onOpenChange={(open) => !open && setSetupDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Connect existing catalog</DialogTitle>
+            <DialogDescription>Select a Meta catalog to connect to this WhatsApp account.</DialogDescription>
+          </DialogHeader>
+          {availableQuery.isPending ? <p className="text-sm text-muted-foreground">Loading catalogs…</p>
+          : availableQuery.isError ? <ErrorState message="Couldn't load catalogs" onRetry={() => void availableQuery.refetch()} />
+          : availableQuery.data?.length ? (
+            <div className="space-y-2">
+              {availableQuery.data.map((catalog) => (
+                <label key={catalog.id} className="flex cursor-pointer items-center gap-3 rounded-xl border p-3">
+                  <input type="radio" name="catalog" value={catalog.id} checked={selectedCatalogId === catalog.id} onChange={() => setSelectedCatalogId(catalog.id)} />
+                  <span>{catalog.name}</span>
+                </label>
+              ))}
+            </div>
+          ) : <p className="text-sm text-muted-foreground">No existing catalogs found. Create a new catalog instead.</p>}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSetupDialog(null)}>Cancel</Button>
+            <Button disabled={!selectedCatalogId || connectMutation.isPending} onClick={() => connectMutation.mutate(selectedCatalogId)}>
+              {connectMutation.isPending ? "Connecting…" : "Connect"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={setupDialog === "create"} onOpenChange={(open) => !open && setSetupDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create WhatsApp catalog</DialogTitle>
+            <DialogDescription>Create a Meta catalog and connect it to WhatsApp.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(event) => { event.preventDefault(); if (catalogName.trim()) createCatalogMutation.mutate(catalogName) }}>
+            <label htmlFor="catalog-name" className="mb-2 block text-sm font-medium">Catalog name</label>
+            <Input id="catalog-name" value={catalogName} onChange={(event) => setCatalogName(event.target.value)} placeholder="Hotel Services" maxLength={100} required />
+            <DialogFooter className="mt-5">
+              <Button type="button" variant="outline" onClick={() => setSetupDialog(null)}>Cancel</Button>
+              <Button type="submit" disabled={!catalogName.trim() || createCatalogMutation.isPending}>
+                {createCatalogMutation.isPending ? "Creating…" : "Create and connect"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={confirmDisconnect}
+        onOpenChange={setConfirmDisconnect}
+        title="Disconnect catalog?"
+        description="This removes the WhatsApp association. The catalog and its products will remain available to reconnect later."
+        confirmLabel="Disconnect"
+        onConfirm={() => disconnectMutation.mutateAsync()}
+      />
+      <ConfirmDialog
+        open={confirmDeleteCatalog}
+        onOpenChange={setConfirmDeleteCatalog}
+        title="Delete catalog permanently?"
+        description="This permanently deletes the connected catalog and all its products. This cannot be undone."
+        confirmLabel="Delete catalog"
+        onConfirm={() => deleteCatalogMutation.mutateAsync()}
+      />
+
       <ItemFormDialog open={formOpen} onOpenChange={setFormOpen} item={editing} onSave={save} onDelete={() => { if (editing) { setFormOpen(false); setDeleting([editing.id]) } }} />
 
       <ConfirmDialog
@@ -216,10 +418,9 @@ export default function CataloguePage() {
         description="This removes the item from your catalogue. This can't be undone."
         onConfirm={async () => {
           if (!deleting) return
-          await deleteCatalogueItems(deleting)
+          await deleteItemsMutation.mutateAsync(deleting)
           toast.success(deleting.length > 1 ? `${deleting.length} items deleted` : "Item deleted")
           setSelected(new Set())
-          reload()
         }}
       />
     </>
