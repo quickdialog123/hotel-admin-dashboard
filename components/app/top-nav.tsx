@@ -1,9 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { useRef } from "react"
 import { Check, ChevronDown, LogOut, Settings, Sparkles, User } from "lucide-react"
+import { toast } from "sonner"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { AuthFlowError } from "@/lib/auth/auth.api"
+import { useLogout } from "@/lib/auth/auth.hooks"
 import { cn } from "@/lib/utils"
 
 type NavLink = { href: string; label: string }
@@ -36,7 +40,30 @@ const pillBase = "text-[15px] font-medium whitespace-nowrap transition-colors ou
 
 export function TopNav() {
   const pathname = usePathname()
+  const router = useRouter()
+  const logout = useLogout()
+  const logoutLock = useRef(false)
   const settingsActive = isWithin(pathname, "/settings")
+
+  async function handleSignOut() {
+    if (logoutLock.current || logout.isPending) return
+    logoutLock.current = true
+
+    try {
+      const result = await logout.mutateAsync()
+      if (result.frontendSignedOut) router.replace("/login")
+    } catch (error) {
+      if (error instanceof AuthFlowError && error.frontendSignedOut) {
+        toast.error("Local sign-out succeeded, but server-side session revocation could not be confirmed.")
+        router.replace("/login")
+        return
+      }
+
+      toast.error("Unable to sign out. Please try again.")
+    } finally {
+      logoutLock.current = false
+    }
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b bg-white">
@@ -97,7 +124,7 @@ export function TopNav() {
               <Settings /> Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem render={<Link href="/login" />}>
+            <DropdownMenuItem disabled={logout.isPending} onClick={() => void handleSignOut()}>
               <LogOut /> Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
