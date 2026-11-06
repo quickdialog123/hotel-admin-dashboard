@@ -1,101 +1,110 @@
-import "server-only"
+import "server-only";
 
-import CredentialsProvider from "next-auth/providers/credentials"
-import type { NextAuthOptions } from "next-auth"
-import { z } from "zod"
-import { clientEnv } from "./env/client"
-import { serverEnv } from "./env/server"
-import { currentUserSchema } from "./api/auth-schemas"
+import type { NextAuthOptions } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+import { z } from "zod";
+
+import { currentUserSchema } from "@/lib/api/auth-schemas";
+import { clientEnv } from "@/lib/env/client";
+import { serverEnv } from "@/lib/env/server";
 
 const accessTokenSchema = z
   .string()
   .max(8192)
-  .regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/)
-
-async function authorizeAccessToken(value: unknown) {
-  const parsedToken = accessTokenSchema.safeParse(value)
-  if (!parsedToken.success) return null
-
-  let response: Response
-  try {
-    const apiBaseUrl = clientEnv.NEXT_PUBLIC_API_BASE_URL.replace(/\/+$/, "")
-    response = await fetch(`${apiBaseUrl}/auth/me`, {
-      headers: {
-        Authorization: `Bearer ${parsedToken.data}`,
-        Origin: serverEnv.FRONTEND_ORIGIN,
-      },
-      cache: "no-store",
-      redirect: "error",
-      signal: AbortSignal.timeout(8_000),
-    })
-  } catch {
-    throw new Error("Backend authentication service is unavailable")
-  }
-
-  if (response.status === 401 || response.status === 403) return null
-  if (!response.ok) {
-    throw new Error("Backend authentication service is unavailable")
-  }
-
-  let responseBody: unknown
-  try {
-    responseBody = await response.json()
-  } catch {
-    throw new Error("Backend authentication service returned invalid data")
-  }
-
-  const parsedUser = currentUserSchema.safeParse(responseBody)
-  if (!parsedUser.success) return null
-
-  return {
-    id: parsedUser.data.userId,
-    ...parsedUser.data,
-    accessToken: parsedToken.data,
-  }
-}
+  .regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
 
 export const authOptions: NextAuthOptions = {
   secret: serverEnv.AUTH_SECRET,
+
   session: {
     strategy: "jwt",
   },
+
+  pages: {
+    signIn: "/login",
+  },
+
   providers: [
     CredentialsProvider({
-      name: "Backend access token",
+      name: "Credentials",
+
       credentials: {
-        accessToken: { label: "Access token", type: "password" },
+        accessToken: { type: "text" },
       },
-      authorize: async (credentials) =>
-        authorizeAccessToken(credentials?.accessToken),
+
+      async authorize(credentials) {
+        const parsed = accessTokenSchema.safeParse(
+          credentials?.accessToken,
+        );
+
+        console.log("authOptions authorize parsed:", parsed);
+
+        if (!parsed.success) return null;
+
+        const response = await fetch(
+          `${clientEnv.NEXT_PUBLIC_API_BASE_URL}/auth/me`,
+          {
+            headers: {
+              Authorization: `Bearer ${parsed.data}`,
+              "Content-Type": "application/json",
+              "origin": serverEnv.FRONTEND_ORIGIN,
+            },
+        
+            cache: "no-store",
+            signal: AbortSignal.timeout(8_000),
+          },
+        );
+
+
+        console.log("Authorize status:", response.status);
+
+if (!response.ok) {
+  console.error(
+    "Authorize response:",
+    await response.text(),
+  );
+
+  return null;
+}
+
+        const user = currentUserSchema.parse(
+          await response.json(),
+        );
+
+        return {
+          id: user.userId,
+          ...user,
+          accessToken: parsed.data,
+        };
+      },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user, trigger }) {
-      if (trigger === "update") {
-        // Token updates are ignored until the refresh flow can validate them.
-        return token
-      }
 
+  callbacks: {
+    async jwt({ token, user }) {
       if (user) {
-        token.backendAccessToken = user.accessToken
+        token.backendAccessToken = user.accessToken;
+
         token.backendUser = {
           userId: user.userId,
           sessionId: user.sessionId,
           hotelId: user.hotelId,
           role: user.role,
-        }
+        };
       }
 
-      return token
+      return token;
     },
+
     async session({ session, token }) {
       if (!token.backendAccessToken || !token.backendUser) {
-        throw new Error("Auth.js session is missing verified backend identity")
+        throw new Error("Invalid authentication session");
       }
 
-      session.accessToken = token.backendAccessToken
-      session.user = token.backendUser
-      return session
+      session.accessToken = token.backendAccessToken;
+      session.user = token.backendUser;
+
+      return session;
     },
   },
-}
+};

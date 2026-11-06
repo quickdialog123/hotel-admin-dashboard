@@ -31,24 +31,22 @@ export function LoginForm() {
   const [validationError, setValidationError] = useState<string | null>(null)
   const loginMutation = useLogin()
 
-  function onSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (loginMutation.cleanupFailed || loginMutation.isPending) return
+  const login = useLogin();
 
-    const credentials = loginCredentialsSchema.safeParse({ email, password })
-    if (!credentials.success) {
-      setValidationError("Enter a valid email address and password.")
-      return
-    }
+async function onSubmit(e: React.FormEvent) {
+  e.preventDefault();
 
-    setValidationError(null)
-    setPassword("")
-    loginMutation.submitCredentials(credentials.data)
+  try {
+    await login.mutateAsync({ email, password });
+
+    router.replace("/dashboard");
+    router.refresh();
+  } catch {
+    // React Query exposes the error through login.isError.
   }
+}
 
-  const errorMessage = validationError ?? (loginMutation.error
-    ? getLoginErrorMessage(loginMutation.error)
-    : null)
+
 
   useEffect(() => {
     if (loginMutation.isSuccess) router.replace("/dashboard")
@@ -73,10 +71,18 @@ export function LoginForm() {
             <Label htmlFor="password">Password</Label>
             <Input id="password" type="password" autoComplete="current-password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="h-10 rounded-xl" required />
           </div>
-          {errorMessage && <p role="alert" className="text-sm text-red-600">{errorMessage}</p>}
-          <Button type="submit" disabled={loginMutation.isPending || loginMutation.cleanupFailed} className="h-10 w-full rounded-xl">
-            {loginMutation.isPending ? "Signing in…" : "Sign in"}
-          </Button>
+          {login.isError && (
+  <p role="alert" className="text-sm text-red-600">
+    Unable to sign in. Check your credentials.
+  </p>
+)}
+          <Button
+  type="submit"
+  disabled={login.isPending}
+  className="h-10 w-full rounded-xl"
+>
+  {login.isPending ? "Signing in…" : "Sign in"}
+</Button>
         </form>
       </div>
     </div>

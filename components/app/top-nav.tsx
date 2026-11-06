@@ -6,7 +6,6 @@ import { useRef } from "react"
 import { Check, ChevronDown, LogOut, Settings, Sparkles, User } from "lucide-react"
 import { toast } from "sonner"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { AuthFlowError } from "@/lib/auth/auth.api"
 import { useLogout } from "@/lib/auth/auth.hooks"
 import { cn } from "@/lib/utils"
 
@@ -45,25 +44,18 @@ export function TopNav() {
   const logoutLock = useRef(false)
   const settingsActive = isWithin(pathname, "/settings")
 
-  async function handleSignOut() {
-    if (logoutLock.current || logout.isPending) return
-    logoutLock.current = true
+ async function handleSignOut() {
+  if (logout.isPending) return;
 
-    try {
-      const result = await logout.mutateAsync()
-      if (result.frontendSignedOut) router.replace("/login")
-    } catch (error) {
-      if (error instanceof AuthFlowError && error.frontendSignedOut) {
-        toast.error("Local sign-out succeeded, but server-side session revocation could not be confirmed.")
-        router.replace("/login")
-        return
-      }
-
-      toast.error("Unable to sign out. Please try again.")
-    } finally {
-      logoutLock.current = false
-    }
+  try {
+    await logout.mutateAsync();
+  } catch {
+    toast.error("Backend logout could not be confirmed.");
+  } finally {
+    router.replace("/login");
+    router.refresh();
   }
+}
 
   return (
     <header className="sticky top-0 z-40 border-b bg-white">
