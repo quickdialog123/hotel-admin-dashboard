@@ -13,7 +13,9 @@ declare module "next-auth" {
 
 declare module "next-auth/jwt" {
   interface JWT {
-    backendAccessToken?: string
-    backendUser?: CurrentUser
+    backendAuth?: {
+      accessToken: string
+      user: CurrentUser
+    }
   }
 }

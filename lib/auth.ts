@@ -73,24 +73,29 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        const { accessToken, id, ...backendUser } = user
-
-        token.backendAccessToken = accessToken
-        token.backendUser = backendUser
+        token.backendAuth = {
+          accessToken: user.accessToken,
+          user: {
+            userId: user.userId,
+            sessionId: user.sessionId,
+            hotelId: user.hotelId,
+            role: user.role,
+          },
+        }
       }
 
       return token
     },
 
     async session({ session, token }) {
-      if (!token.backendAccessToken || !token.backendUser) {
+      if (!token.backendAuth) {
         throw new Error("Invalid authentication session")
       }
 
       return {
         ...session,
-        accessToken: token.backendAccessToken,
-        user: token.backendUser,
+        accessToken: token.backendAuth.accessToken,
+        user: token.backendAuth.user,
       }
     },
   },
