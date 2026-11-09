@@ -304,9 +304,9 @@ export type WabaDashboardStats = {
 ```
 ### Functions
 - `getWabaConnection(): Promise<WabaConnection>`
-- `completeWabaSignup(input): Promise<WabaConnection>` — `POST /api/whatsapp/embedded-signup/complete`; exchanges the Embedded Signup result and may return `unverified`.
-- `registerWaba(pin): Promise<WabaConnection>` — `POST /api/whatsapp/register` with `{ "pin": "123456" }`; uses the authenticated user session.
+- `completeWabaSignup(input): Promise<WabaConnection>` — `POST /api/whatsapp/embedded-signup/complete`; exchanges the Embedded Signup result and returns `unverified` until registration succeeds.
+- `registerWaba(pin): Promise<WabaConnection>` — `POST /api/whatsapp/register` with `{ "pin": "123456" }`; sends the six-digit registration PIN.
 - `getWabaConnection(): Promise<WabaConnection>` — `GET /api/whatsapp/status`.
-- `disconnectWaba(): Promise<WabaConnection>`
+- `disconnectWaba(): Promise<WabaConnection>` — `POST /api/whatsapp/disconnect`.
 - `simulateWabaError(): Promise<WabaConnection>`
 - `getDashboardStats(): Promise<WabaDashboardStats>`
