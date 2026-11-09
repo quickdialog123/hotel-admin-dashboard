@@ -32,6 +32,7 @@ import {
   disconnectWaba,
   getWabaConnection,
 } from "@/lib/api/waba"
+import { WabaVerificationGate } from "@/components/app/waba-verification-gate"
 
 const whatsappConnectionKey = [
   "whatsapp",
@@ -152,6 +153,7 @@ export default function WhatsAppPage() {
 
   return (
     <>
+      <WabaVerificationGate />
       <MetaSdk
         onReady={() =>
           setMetaReady(true)
