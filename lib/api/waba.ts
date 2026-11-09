@@ -60,14 +60,14 @@ export type WabaDashboardStats = {
 
 export function getWabaConnection() {
   return getJson(
-    "whatsapp/status",
+    "api/whatsapp/status",
     wabaConnectionSchema,
   )
 }
 
 export function disconnectWaba() {
   return postJson(
-    "whatsapp/disconnect",
+    "api/whatsapp/disconnect",
     {},
     wabaConnectionSchema,
   )
@@ -77,7 +77,7 @@ export function completeWabaSignup(
   input: CompleteSignupInput,
 ) {
   return postJson(
-    "whatsapp/embedded-signup/complete",
+    "api/whatsapp/embedded-signup/complete",
     input,
     wabaConnectionSchema,
     embeddedSignupInputSchema,
@@ -88,7 +88,7 @@ export function registerWaba(pin: string) {
   const input = whatsappPinInputSchema.parse({ pin })
 
   return postJson(
-    "whatsapp/register",
+    "api/whatsapp/register",
     input,
     wabaConnectionSchema,
     whatsappPinInputSchema,
