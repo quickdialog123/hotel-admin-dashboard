@@ -8,7 +8,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await getServerSession(authOptions)
 
   if (!session) redirect("/login")
-
   return (
     <div className="app-bg min-h-screen overflow-x-clip">
       <TopNav />
