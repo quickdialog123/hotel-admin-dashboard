@@ -1,4 +1,6 @@
+import z from "zod"
 import { clone, delay, isoAgo, newId } from "./_mock"
+import { getJson, patchJson, postJson } from "./client"
 
 export type CatalogueStatus = "active" | "draft" | "out_of_stock"
 
@@ -73,75 +75,142 @@ export async function updateCatalogueItemsCategory(ids: string[], category: stri
 
 export type WhatsAppCatalog = { id: string; name: string }
 
-const EXISTING_CATALOG_ID = "meta_catalog_hotel_001"
-const mockCatalogs: WhatsAppCatalog[] = [
-  { id: EXISTING_CATALOG_ID, name: "Hotel Services" },
-  { id: "meta_catalog_spa_002", name: "Spa & Wellness" },
-]
+export const whatsappCatalogSchema =
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    vertical: z.string().nullable(),
+    productCount: z.number().nullable(),
+  })
 
-// Start with NO catalog connected to demonstrate the onboarding empty state.
-// Change to EXISTING_CATALOG_ID to start with the products grid instead.
-let activeCatalogId: string | null = null
-let loadedProductCatalogId = EXISTING_CATALOG_ID
-const productsByCatalog = new Map<string, CatalogueItem[]>([
-  [EXISTING_CATALOG_ID, clone(items)],
-  ["meta_catalog_spa_002", []],
-])
+export const catalogConnectionSchema =
+  z.object({
+    status: z.enum([
+      "not_connected",
+      "connected",
+      "hidden",
+    ]),
 
-function storeCurrentItems() {
-  productsByCatalog.set(loadedProductCatalogId, clone(items))
+    catalog:
+      whatsappCatalogSchema.nullable(),
+
+    catalogVisible:
+      z.boolean(),
+
+    cartEnabled:
+      z.boolean(),
+  })
+
+export const availableCatalogSchema =
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    vertical: z.string().nullable(),
+    productCount: z.number(),
+    connected: z.boolean(),
+  })
+
+export const availableCatalogsSchema =
+  z.array(
+    availableCatalogSchema,
+  )
+
+export const createCatalogInputSchema =
+  z.object({
+    name: z
+      .string()
+      .trim()
+      .min(
+        1,
+        "Catalog name is required",
+      )
+      .max(100),
+  })
+
+export const connectCatalogInputSchema =
+  z.object({
+    catalogId:
+      z.string().min(1),
+  })
+
+export const catalogSettingsInputSchema =
+  z
+    .object({
+      catalogVisible:
+        z.boolean().optional(),
+
+      cartEnabled:
+        z.boolean().optional(),
+    })
+    .refine(
+      (value) =>
+        value.catalogVisible !==
+          undefined ||
+        value.cartEnabled !==
+          undefined,
+      {
+        message:
+          "At least one setting is required",
+      },
+    )
+
+export type CatalogConnection = z.infer<typeof catalogConnectionSchema>
+
+export type AvailableCatalog = z.infer<typeof availableCatalogSchema>
+
+export type CatalogSettingsInput = z.infer< typeof catalogSettingsInputSchema>
+
+export function getCatalogConnection() {
+  return getJson(
+    "whatsapp/catalogs/connection",
+    catalogConnectionSchema,
+  )
 }
 
-function loadCatalogItems(catalogId: string) {
-  storeCurrentItems()
-  items = clone(productsByCatalog.get(catalogId) ?? [])
-  loadedProductCatalogId = catalogId
+export function getAvailableCatalogs() {
+  return getJson(
+    "whatsapp/catalogs/available",
+    availableCatalogsSchema,
+  )
 }
 
-export async function getActiveWhatsAppCatalog(): Promise<WhatsAppCatalog | null> {
-  return delay(clone(mockCatalogs.find((c) => c.id === activeCatalogId) ?? null))
-}
-
-export async function listAvailableWhatsAppCatalogs(): Promise<WhatsAppCatalog[]> {
-  return delay(clone(mockCatalogs))
-}
-
-export async function createWhatsAppCatalog(name: string): Promise<WhatsAppCatalog> {
-  const trimmed = name.trim()
-  if (!trimmed) throw new Error("Catalog name is required")
-  if (mockCatalogs.some((catalog) => catalog.name.toLowerCase() === trimmed.toLowerCase())) {
-    throw new Error("A catalog with this name already exists")
+export function createWhatsAppCatalog(
+  name: string,
+) {
+  const input = {
+    name,
   }
-  const catalog = { id: newId("meta_catalog"), name: trimmed }
-  mockCatalogs.push(catalog)
-  productsByCatalog.set(catalog.id, [])
-  return delay(clone(catalog))
+
+  return postJson(
+    "whatsapp/catalogs",
+    input,
+    catalogConnectionSchema,
+    createCatalogInputSchema,
+  )
 }
 
-export async function connectWhatsAppCatalog(id: string): Promise<WhatsAppCatalog> {
-  const catalog = mockCatalogs.find((c) => c.id === id)
-  if (!catalog) throw new Error("Catalog not found")
-  loadCatalogItems(id)
-  activeCatalogId = id
-  return delay(clone(catalog))
+export function connectWhatsAppCatalog(
+  catalogId: string,
+) {
+  const input = {
+    catalogId,
+  }
+
+  return postJson(
+    "whatsapp/catalogs/connect",
+    input,
+    catalogConnectionSchema,
+    connectCatalogInputSchema,
+  )
 }
 
-export async function disconnectWhatsAppCatalog(): Promise<void> {
-  storeCurrentItems()
-  activeCatalogId = null
-  return delay(undefined)
+export function updateCatalogSettings(
+  input: CatalogSettingsInput,
+) {
+  return patchJson(
+    "whatsapp/catalogs/settings",
+    input,
+    catalogConnectionSchema,
+    catalogSettingsInputSchema,
+  )
 }
-
-export async function deleteActiveWhatsAppCatalog(): Promise<void> {
-  if (!activeCatalogId) throw new Error("No connected catalog")
-  const id = activeCatalogId
-  storeCurrentItems()
-  const index = mockCatalogs.findIndex((c) => c.id === id)
-  if (index !== -1) mockCatalogs.splice(index, 1)
-  productsByCatalog.delete(id)
-  activeCatalogId = null
-  items = []
-  loadedProductCatalogId = ""
-  return delay(undefined)
-}
-

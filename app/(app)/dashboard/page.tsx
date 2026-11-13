@@ -35,7 +35,7 @@ export default function DashboardPage() {
         ) : (
           <Link
             href="/whatsapp"
-            className={`flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-6 transition-colors hover:border-slate-400 ${conn.data.status === "ERROR" ? "border-red-200 bg-red-50/50" : "bg-white"}`}
+            className={`flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-6 transition-colors hover:border-slate-400 ${conn.data.status === "error" ? "border-red-200 bg-red-50/50" : "bg-white"}`}
           >
             <div>
               <h2 id="conn-heading" className="text-sm font-medium text-muted-foreground">
@@ -46,9 +46,9 @@ export default function DashboardPage() {
                 {conn.data.phoneNumber && <span className="text-lg font-semibold tabular-nums">{conn.data.phoneNumber}</span>}
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
-                {conn.data.status === "CONNECTED" && `Your receptionist is live${conn.data.connectedAt ? ` · connected ${formatDate(conn.data.connectedAt)}` : ""}.`}
-                {conn.data.status === "NOT_CONNECTED" && "Guests can't reach your receptionist until WhatsApp is connected."}
-                {conn.data.status === "ERROR" && conn.data.errorMessage}
+                {conn.data.status === "connected" && `Your receptionist is live${conn.data.connectedAt ? ` · connected ${formatDate(conn.data.connectedAt)}` : ""}.`}
+                {conn.data.status === "not_connected" && "Guests can't reach your receptionist until WhatsApp is connected."}
+                {conn.data.status === "error" && conn.data.errorMessage}
               </p>
             </div>
             <span className="flex items-center gap-1 text-sm font-medium">

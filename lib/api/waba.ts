@@ -10,10 +10,10 @@ import {
 export const wabaConnectionSchema =
   z.object({
     status: z.enum([
-      "CONNECTED",
-      "UNVERIFIED",
-      "NOT_CONNECTED",
-      "ERROR",
+      "connected",
+      "unverified",
+      "not_connected",
+      "error",
     ]),
     wabaId: z.string().nullable(),
     phoneNumber: z.string().nullable(),
