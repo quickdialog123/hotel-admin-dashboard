@@ -120,7 +120,7 @@ export default function CataloguePage() {
     queryFn: getWabaConnection,
   });
 
-  const whatsappConnected = whatsappQuery.data?.status === "connected";
+  const whatsappConnected = whatsappQuery.data?.status === "CONNECTED";
 
   /*
   |--------------------------------------------------------------------------
@@ -132,7 +132,6 @@ export default function CataloguePage() {
     queryKey: catalogConnectionKey,
 
     queryFn: getCatalogConnection,
-
     enabled: whatsappConnected,
   });
 
@@ -468,14 +467,10 @@ export default function CataloguePage() {
       ) : !connection ||
         connection.status === 'not_connected' ||
         !activeCatalog ? (
-        /*
-        |--------------------------------------------------------------------------
-        | No catalog
-        |--------------------------------------------------------------------------
-        */
-
         <EmptyState
-          icon={<ShoppingBag className="size-5" />}
+          icon={
+            <ShoppingBag className="size-5" />
+          }
           title="Connect a catalog to WhatsApp"
           description="Use an existing Meta catalog or create a new one for this hotel."
           action={
@@ -483,16 +478,20 @@ export default function CataloguePage() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  setSelectedCatalogId('');
-
-                  setSetupDialog('connect');
+                  setSelectedCatalogId("")
+                  setSetupDialog("connect")
                 }}
               >
                 <Link2 />
                 Connect existing
               </Button>
 
-              <Button onClick={() => setSetupDialog('create')}>
+              <Button
+                onClick={() => {
+                  setCatalogName("")
+                  setSetupDialog("create")
+                }}
+              >
                 <Plus />
                 Create catalog
               </Button>
