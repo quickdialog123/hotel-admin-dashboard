@@ -3,10 +3,10 @@ import { cn } from "@/lib/utils"
 import type { WabaConnectionStatus } from "@/lib/api/waba"
 
 const config = {
-  connected: { label: "Connected", icon: CheckCircle2, cls: "bg-slate-900 text-white" },
-  unverified: { label: "Unverified", icon: ShieldAlert, cls: "border border-amber-200 bg-amber-50 text-amber-800" },
-  not_connected: { label: "Not connected", icon: CircleDashed, cls: "border-2 border-slate-300 bg-white text-slate-700" },
-  error: { label: "Connection error", icon: AlertTriangle, cls: "bg-red-50 text-red-700 border border-red-200" },
+  CONNECTED: { label: "Connected", icon: CheckCircle2, cls: "bg-slate-900 text-white" },
+  UNVERIFIED: { label: "Unverified", icon: ShieldAlert, cls: "border border-amber-200 bg-amber-50 text-amber-800" },
+  NOT_CONNECTED: { label: "Not connected", icon: CircleDashed, cls: "border-2 border-slate-300 bg-white text-slate-700" },
+  ERROR: { label: "Connection error", icon: AlertTriangle, cls: "bg-red-50 text-red-700 border border-red-200" },
 } as const
 
 export function ConnectionPill({ status, size = "md" }: { status: WabaConnectionStatus; size?: "md" | "lg" }) {

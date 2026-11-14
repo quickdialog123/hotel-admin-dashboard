@@ -33,9 +33,9 @@ export function WabaVerificationGate() {
       queryClient.setQueryData(whatsappConnectionKey, connection)
       setPin("")
 
-      if (connection.status === "connected") {
+      if (connection.status === "CONNECTED") {
         toast.success("WhatsApp connected")
-      } else if (connection.status === "unverified") {
+      } else if (connection.status === "NOT_CONNECTED") {
         toast.error("That PIN could not verify your WhatsApp account. Try again.")
       }
     },
@@ -45,7 +45,7 @@ export function WabaVerificationGate() {
   })
 
   return (
-    <Dialog open={data?.status === "unverified"}>
+    <Dialog open={data?.status === "UNVERIFIED"}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Verify your WhatsApp account</DialogTitle>

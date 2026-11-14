@@ -1,4 +1,6 @@
+import z from "zod"
 import { clone, delay, isoAgo, newId } from "./_mock"
+import { getJson, patchJson, postJson } from "./client"
 
 export type CatalogueStatus = "active" | "draft" | "out_of_stock"
 
@@ -66,4 +68,149 @@ export async function deleteCatalogueItems(ids: string[]): Promise<void> {
 export async function updateCatalogueItemsCategory(ids: string[], category: string): Promise<void> {
   items = items.map((i) => (ids.includes(i.id) ? { ...i, category, updatedAt: new Date().toISOString() } : i))
   return delay(undefined)
+}
+
+// Append these exports at the END of your existing lib/api/catalogue.ts.
+// This is a frontend-only simulator. Replace these functions with real API calls later.
+
+export type WhatsAppCatalog = { id: string; name: string }
+
+export const whatsappCatalogSchema =
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    vertical: z.string().nullable(),
+    productCount: z.number().nullable(),
+  })
+
+export const catalogConnectionSchema =
+  z.object({
+    status: z.enum([
+      "not_connected",
+      "connected",
+      "hidden",
+    ]),
+
+    catalog:
+      whatsappCatalogSchema.nullable(),
+
+    catalogVisible:
+      z.boolean(),
+
+    cartEnabled:
+      z.boolean(),
+  })
+
+export const availableCatalogSchema =
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    vertical: z.string().nullable(),
+    productCount: z.number(),
+    connected: z.boolean(),
+  })
+
+export const availableCatalogsSchema =
+  z.array(
+    availableCatalogSchema,
+  )
+
+export const createCatalogInputSchema =
+  z.object({
+    name: z
+      .string()
+      .trim()
+      .min(
+        1,
+        "Catalog name is required",
+      )
+      .max(100),
+  })
+
+export const connectCatalogInputSchema =
+  z.object({
+    catalogId:
+      z.string().min(1),
+  })
+
+export const catalogSettingsInputSchema =
+  z
+    .object({
+      catalogVisible:
+        z.boolean().optional(),
+
+      cartEnabled:
+        z.boolean().optional(),
+    })
+    .refine(
+      (value) =>
+        value.catalogVisible !==
+          undefined ||
+        value.cartEnabled !==
+          undefined,
+      {
+        message:
+          "At least one setting is required",
+      },
+    )
+
+export type CatalogConnection = z.infer<typeof catalogConnectionSchema>
+
+export type AvailableCatalog = z.infer<typeof availableCatalogSchema>
+
+export type CatalogSettingsInput = z.infer< typeof catalogSettingsInputSchema>
+
+export function getCatalogConnection() {
+  return getJson(
+    "whatsapp/catalogs/connection",
+    catalogConnectionSchema,
+  )
+}
+
+export function getAvailableCatalogs() {
+  return getJson(
+    "whatsapp/catalogs/available",
+    availableCatalogsSchema,
+  )
+}
+
+export function createWhatsAppCatalog(
+  name: string,
+) {
+  const input = {
+    name,
+  }
+
+  return postJson(
+    "whatsapp/catalogs",
+    input,
+    catalogConnectionSchema,
+    createCatalogInputSchema,
+  )
+}
+
+export function connectWhatsAppCatalog(
+  catalogId: string,
+) {
+  const input = {
+    catalogId,
+  }
+
+  return postJson(
+    "whatsapp/catalogs/connect",
+    input,
+    catalogConnectionSchema,
+    connectCatalogInputSchema,
+  )
+}
+
+export function updateCatalogSettings(
+  input: CatalogSettingsInput,
+) {
+  return patchJson(
+    "whatsapp/catalogs/settings",
+    input,
+    catalogConnectionSchema,
+    catalogSettingsInputSchema,
+  )
 }
