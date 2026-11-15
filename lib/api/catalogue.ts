@@ -88,6 +88,7 @@ export const catalogConnectionSchema =
     status: z.enum([
       "not_connected",
       "connected",
+      "configured",
       "hidden",
     ]),
 

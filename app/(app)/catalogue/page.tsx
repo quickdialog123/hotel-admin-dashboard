@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Check,
+  ExternalLink,
   LayoutGrid,
-  Link2,
   List,
   MessageCircle,
   Plus,
+  RefreshCw,
   Settings2,
   ShoppingBag,
   Trash2,
@@ -16,6 +17,8 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+
+import { ConfirmDialog } from '@/components/app/confirm-dialog';
 import { PageHeader } from '@/components/app/page-header';
 import { PillSelect } from '@/components/app/pill-select';
 import { StatusPill } from '@/components/app/status-pill';
@@ -24,19 +27,18 @@ import {
   EmptyState,
   ErrorState,
 } from '@/components/app/states';
-import { TagList } from '@/components/catalogue/tag-list';
 import {
   ItemFormDialog,
   STATUS_OPTIONS,
   Thumb,
   type ItemDraft,
 } from '@/components/catalogue/item-form-dialog';
+import { TagList } from '@/components/catalogue/tag-list';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -46,16 +48,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { ConfirmDialog } from '@/components/app/confirm-dialog';
 import {
   CATALOGUE_CATEGORIES,
-  connectWhatsAppCatalog,
   createCatalogueItem,
-  createWhatsAppCatalog,
   deleteCatalogueItems,
-  getAvailableCatalogs,
   getCatalogConnection,
   listCatalogueItems,
   updateCatalogueItem,
@@ -73,7 +70,11 @@ const whatsappConnectionKey = ['whatsapp', 'connection'] as const;
 
 const catalogConnectionKey = ['whatsapp', 'catalog', 'connection'] as const;
 
-const availableCatalogsKey = ['whatsapp', 'catalog', 'available'] as const;
+const commerceManagerUrl =
+  'https://www.facebook.com/business/tools/commerce-manager';
+
+const whatsappManagerUrl =
+  'https://business.facebook.com/wa/manage/home/';
 
 function StatusBadge({ status }: { status: CatalogueItem['status'] }) {
   if (status === 'active') {
@@ -92,45 +93,17 @@ export default function CataloguePage() {
 
   const queryClient = useQueryClient();
 
-  /*
-  |--------------------------------------------------------------------------
-  | Local UI state
-  |--------------------------------------------------------------------------
-  */
-
-  const [setupDialog, setSetupDialog] = useState<'connect' | 'create' | null>(
-    null,
-  );
-
   const [settingsOpen, setSettingsOpen] = useState(false);
-
-  const [catalogName, setCatalogName] = useState('');
-
-  const [selectedCatalogId, setSelectedCatalogId] = useState('');
-
-  /*
-  |--------------------------------------------------------------------------
-  | WhatsApp prerequisite
-  |--------------------------------------------------------------------------
-  */
 
   const whatsappQuery = useQuery({
     queryKey: whatsappConnectionKey,
-
     queryFn: getWabaConnection,
   });
 
-  const whatsappConnected = whatsappQuery.data?.status === "CONNECTED";
-
-  /*
-  |--------------------------------------------------------------------------
-  | Catalog connection
-  |--------------------------------------------------------------------------
-  */
+  const whatsappConnected = whatsappQuery.data?.status === 'CONNECTED';
 
   const catalogQuery = useQuery({
     queryKey: catalogConnectionKey,
-
     queryFn: getCatalogConnection,
     enabled: whatsappConnected,
   });
@@ -141,38 +114,9 @@ export default function CataloguePage() {
 
   const catalogId = activeCatalog?.id;
 
-  /*
-  |--------------------------------------------------------------------------
-  | Available Meta catalogs
-  |--------------------------------------------------------------------------
-  */
-
-  const availableQuery = useQuery({
-    queryKey: availableCatalogsKey,
-
-    queryFn: getAvailableCatalogs,
-
-    enabled:
-      setupDialog === 'connect' &&
-      whatsappConnected &&
-      connection?.status === 'not_connected',
-  });
-
-  /*
-  |--------------------------------------------------------------------------
-  | Product data
-  |--------------------------------------------------------------------------
-  |
-  | Still mocked.
-  | QD-64 will replace this with Meta product CRUD.
-  |
-  */
-
   const productsQuery = useQuery({
     queryKey: ['whatsapp', 'catalog', catalogId, 'products'],
-
     queryFn: listCatalogueItems,
-
     enabled: Boolean(catalogId),
   });
 
@@ -183,43 +127,6 @@ export default function CataloguePage() {
       queryKey: ['whatsapp', 'catalog', catalogId, 'products'],
     });
   }
-
-  const createCatalogMutation = useMutation({
-    mutationFn: createWhatsAppCatalog,
-    onSuccess: (nextConnection) => {
-      queryClient.setQueryData(catalogConnectionKey, nextConnection);
-
-      setSetupDialog(null);
-      setCatalogName('');
-      toast.success('Catalog created');
-    },
-
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Couldn't create catalog",
-      );
-    },
-  });
-
-  const connectMutation = useMutation({
-    mutationFn: connectWhatsAppCatalog,
-
-    onSuccess: (nextConnection) => {
-      queryClient.setQueryData(catalogConnectionKey, nextConnection);
-
-      setSetupDialog(null);
-
-      setSelectedCatalogId('');
-
-      toast.success('Catalog connected');
-    },
-
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Couldn't connect catalog",
-      );
-    },
-  });
 
   const settingsMutation = useMutation({
     mutationFn: updateCatalogSettings,
@@ -237,19 +144,8 @@ export default function CataloguePage() {
     },
   });
 
-  /*
-  |--------------------------------------------------------------------------
-  | Existing product mutations
-  |--------------------------------------------------------------------------
-  |
-  | Leave these for now.
-  | QD-64 will replace them.
-  |
-  */
-
   const createItemMutation = useMutation({
     mutationFn: createCatalogueItem,
-
     onSuccess: refreshProducts,
   });
 
@@ -266,15 +162,11 @@ export default function CataloguePage() {
   });
 
   const changeCategoryMutation = useMutation({
-    mutationFn: ({ ids, category }: { ids: string[]; category: string }) => updateCatalogueItemsCategory(ids, category),
-    onSuccess: refreshProducts
-  });
+    mutationFn: ({ ids, category }: { ids: string[]; category: string }) =>
+      updateCatalogueItemsCategory(ids, category),
 
-  /*
-  |--------------------------------------------------------------------------
-  | Product UI state
-  |--------------------------------------------------------------------------
-  */
+    onSuccess: refreshProducts,
+  });
 
   const [category, setCategory] = useState('all');
 
@@ -294,9 +186,7 @@ export default function CataloguePage() {
 
   useEffect(() => {
     setSelected(new Set());
-
     setEditing(null);
-
     setFormOpen(false);
   }, [catalogId]);
 
@@ -338,13 +228,11 @@ export default function CataloguePage() {
 
   function openAdd() {
     setEditing(null);
-
     setFormOpen(true);
   }
 
   function openEdit(item: CatalogueItem) {
     setEditing(item);
-
     setFormOpen(true);
   }
 
@@ -353,7 +241,6 @@ export default function CataloguePage() {
       if (editing) {
         await updateItemMutation.mutateAsync({
           id: editing.id,
-
           draft,
         });
       } else {
@@ -370,6 +257,17 @@ export default function CataloguePage() {
     }
   }
 
+  async function refreshCatalog() {
+    const result = await catalogQuery.refetch();
+
+    if (result.data?.catalog) {
+      toast.success('Catalog connected');
+      return;
+    }
+
+    toast.info('No catalog connected yet');
+  }
+
   const select = (item: CatalogueItem) => (
     <button
       type="button"
@@ -378,12 +276,10 @@ export default function CataloguePage() {
       aria-label={`Select ${item.name}`}
       onClick={(event) => {
         event.stopPropagation();
-
         toggle(item.id);
       }}
       className={cn(
         'absolute top-2.5 right-2.5 flex size-7 items-center justify-center rounded-full border-2 border-white bg-slate-900 text-white shadow-sm transition-opacity outline-none focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-slate-900/40',
-
         selected.has(item.id)
           ? 'opacity-100'
           : 'opacity-0 group-hover:opacity-100',
@@ -393,24 +289,12 @@ export default function CataloguePage() {
     </button>
   );
 
-  /*
-  |--------------------------------------------------------------------------
-  | Render
-  |--------------------------------------------------------------------------
-  */
-
   return (
     <>
       <PageHeader
         title="Catalogue"
         description="Manage products in your connected WhatsApp catalogue."
       />
-
-      {/*
-      |--------------------------------------------------------------------------
-      | WhatsApp loading
-      |--------------------------------------------------------------------------
-      */}
 
       {whatsappQuery.isPending ? (
         <CardGridSkeleton />
@@ -424,12 +308,6 @@ export default function CataloguePage() {
           onRetry={() => void whatsappQuery.refetch()}
         />
       ) : !whatsappConnected ? (
-        /*
-        |--------------------------------------------------------------------------
-        | WhatsApp prerequisite
-        |--------------------------------------------------------------------------
-        */
-
         <EmptyState
           icon={<MessageCircle className="size-5" />}
           title="Connect WhatsApp first"
@@ -442,20 +320,8 @@ export default function CataloguePage() {
           }
         />
       ) : catalogQuery.isPending ? (
-        /*
-        |--------------------------------------------------------------------------
-        | Catalog loading
-        |--------------------------------------------------------------------------
-        */
-
         <CardGridSkeleton />
       ) : catalogQuery.isError ? (
-        /*
-        |--------------------------------------------------------------------------
-        | Catalog error
-        |--------------------------------------------------------------------------
-        */
-
         <ErrorState
           message={
             catalogQuery.error instanceof Error
@@ -468,43 +334,102 @@ export default function CataloguePage() {
         connection.status === 'not_connected' ||
         !activeCatalog ? (
         <EmptyState
-          icon={
-            <ShoppingBag className="size-5" />
-          }
-          title="Connect a catalog to WhatsApp"
-          description="Use an existing Meta catalog or create a new one for this hotel."
+          icon={<ShoppingBag className="size-5" />}
+          title="No catalog connected"
+          description="Create an E-Commerce catalog in Meta, connect it to this WhatsApp Business Account, then return here and refresh."
           action={
-            <div className="flex flex-wrap justify-center gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSelectedCatalogId("")
-                  setSetupDialog("connect")
-                }}
-              >
-                <Link2 />
-                Connect existing
-              </Button>
+            <div className="mx-auto flex max-w-lg flex-col items-center gap-5">
+              <div className="w-full rounded-xl border bg-muted/30 p-4 text-left">
+                <ol className="space-y-3 text-sm">
+                  <li className="flex gap-3">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full border bg-background text-xs font-medium">
+                      1
+                    </span>
 
-              <Button
-                onClick={() => {
-                  setCatalogName("")
-                  setSetupDialog("create")
-                }}
-              >
-                <Plus />
-                Create catalog
-              </Button>
+                    <span className="pt-0.5 text-muted-foreground">
+                      Create an E-Commerce catalog in Meta Commerce Manager.
+                    </span>
+                  </li>
+
+                  <li className="flex gap-3">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full border bg-background text-xs font-medium">
+                      2
+                    </span>
+
+                    <span className="pt-0.5 text-muted-foreground">
+                      Open WhatsApp Manager and select the WhatsApp Business
+                      Account connected to this hotel.
+                    </span>
+                  </li>
+
+                  <li className="flex gap-3">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full border bg-background text-xs font-medium">
+                      3
+                    </span>
+
+                    <span className="pt-0.5 text-muted-foreground">
+                      Open the Catalog section and connect your E-Commerce
+                      catalog.
+                    </span>
+                  </li>
+
+                  <li className="flex gap-3">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full border bg-background text-xs font-medium">
+                      4
+                    </span>
+
+                    <span className="pt-0.5 text-muted-foreground">
+                      Return to QuickDialog and refresh the catalog connection.
+                    </span>
+                  </li>
+                </ol>
+              </div>
+
+              <div className="flex w-fit flex-wrap justify-center gap-2">
+                <Button variant="outline">
+                  <a
+                    href={commerceManagerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className='flex justify-center items-center gap-1'
+                  >
+                    Commerce Manager
+                    <ExternalLink />
+                  </a>
+                </Button>
+
+                <Button variant="outline">
+                  <a
+                    href={whatsappManagerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className='flex justify-center items-center gap-1'
+                  >
+                    WhatsApp Manager
+                    <ExternalLink />
+                  </a>
+                </Button>
+
+                <Button
+                  disabled={catalogQuery.isFetching}
+                  onClick={() => void refreshCatalog()}
+                >
+                  <RefreshCw
+                    className={cn(
+                      'size-4',
+                      catalogQuery.isFetching && 'animate-spin',
+                    )}
+                  />
+
+                  {catalogQuery.isFetching
+                    ? 'Refreshing...'
+                    : 'Refresh catalog'}
+                </Button>
+              </div>
             </div>
           }
         />
       ) : (
-        /*
-        |--------------------------------------------------------------------------
-        | Connected catalog
-        |--------------------------------------------------------------------------
-        */
-
         <>
           <div className="mb-5 flex flex-wrap items-center justify-between gap-4 border-b pb-5">
             <div className="min-w-0">
@@ -512,7 +437,9 @@ export default function CataloguePage() {
                 <h2 className="truncate font-semibold">{activeCatalog.name}</h2>
 
                 <StatusPill
-                  tone={connection.status === 'connected' ? 'solid' : 'neutral'}
+                  tone={
+                    connection.status === 'connected' ? 'solid' : 'neutral'
+                  }
                 >
                   {connection.status === 'connected'
                     ? 'Visible on WhatsApp'
@@ -529,6 +456,21 @@ export default function CataloguePage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                disabled={catalogQuery.isFetching}
+                onClick={() => void refreshCatalog()}
+              >
+                <RefreshCw
+                  className={cn(
+                    'size-4',
+                    catalogQuery.isFetching && 'animate-spin',
+                  )}
+                />
+
+                Refresh
+              </Button>
+
               {connection.status === 'hidden' && (
                 <Button
                   variant="outline"
@@ -543,21 +485,15 @@ export default function CataloguePage() {
                 </Button>
               )}
 
-              <Button variant="outline" onClick={() => setSettingsOpen(true)}>
+              <Button
+                variant="outline"
+                onClick={() => setSettingsOpen(true)}
+              >
                 <Settings2 />
                 Catalog settings
               </Button>
             </div>
           </div>
-
-          {/*
-          |--------------------------------------------------------------------------
-          | Existing product UI
-          |--------------------------------------------------------------------------
-          |
-          | Still mock data until QD-64.
-          |
-          */}
 
           <div className="mb-5 flex flex-wrap items-center gap-2">
             <PillSelect
@@ -569,10 +505,8 @@ export default function CataloguePage() {
                   value: 'all',
                   label: 'All categories',
                 },
-
                 ...CATALOGUE_CATEGORIES.map((category) => ({
                   value: category,
-
                   label: category,
                 })),
               ]}
@@ -587,7 +521,6 @@ export default function CataloguePage() {
                   value: 'all',
                   label: 'All statuses',
                 },
-
                 ...STATUS_OPTIONS,
               ]}
             />
@@ -602,12 +535,10 @@ export default function CataloguePage() {
                   value: 'updated',
                   label: 'Last updated',
                 },
-
                 {
                   value: 'name',
                   label: 'Name',
                 },
-
                 {
                   value: 'price',
                   label: 'Price',
@@ -629,7 +560,6 @@ export default function CataloguePage() {
                   onClick={() => setView(mode)}
                   className={cn(
                     'flex size-8 items-center justify-center rounded-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30',
-
                     view === mode
                       ? 'bg-slate-900 text-white'
                       : 'text-slate-500 hover:text-slate-900',
@@ -668,7 +598,6 @@ export default function CataloguePage() {
                         onClick={async () => {
                           await changeCategoryMutation.mutateAsync({
                             ids: [...selected],
-
                             category: nextCategory,
                           });
 
@@ -744,7 +673,6 @@ export default function CataloguePage() {
                     <div
                       className={cn(
                         'relative overflow-hidden rounded-xl border bg-slate-100',
-
                         selected.has(item.id) && 'ring-2 ring-slate-900',
                       )}
                     >
@@ -759,7 +687,9 @@ export default function CataloguePage() {
                       </div>
                     </div>
 
-                    <p className="mt-2.5 truncate font-semibold">{item.name}</p>
+                    <p className="mt-2.5 truncate font-semibold">
+                      {item.name}
+                    </p>
 
                     <p className="text-sm text-muted-foreground">
                       {formatPrice(item.priceCents)} · {item.category}
@@ -780,7 +710,6 @@ export default function CataloguePage() {
                 className="flex aspect-square flex-col items-center justify-center gap-2 self-start rounded-xl border-2 border-dashed bg-white text-muted-foreground transition-colors outline-none hover:border-slate-900 hover:text-slate-900 focus-visible:border-slate-900 focus-visible:ring-3 focus-visible:ring-slate-900/20"
               >
                 <Plus className="size-6" />
-
                 <span className="text-sm font-medium">Add item</span>
               </button>
 
@@ -805,7 +734,6 @@ export default function CataloguePage() {
                     onClick={() => toggle(item.id)}
                     className={cn(
                       'flex size-6 shrink-0 items-center justify-center rounded-full border-2 outline-none focus-visible:ring-3 focus-visible:ring-slate-900/30',
-
                       selected.has(item.id)
                         ? 'border-slate-900 bg-slate-900 text-white'
                         : 'border-slate-300 text-transparent',
@@ -858,194 +786,6 @@ export default function CataloguePage() {
           )}
         </>
       )}
-
-      {/*
-      |--------------------------------------------------------------------------
-      | Connect existing catalog dialog
-      |--------------------------------------------------------------------------
-      */}
-
-      <Dialog
-        open={setupDialog === 'connect'}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSetupDialog(null);
-
-            setSelectedCatalogId('');
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Connect existing catalog</DialogTitle>
-
-            <DialogDescription>
-              Choose a catalog from this hotel&apos;s Meta Business.
-            </DialogDescription>
-          </DialogHeader>
-
-          {availableQuery.isPending ? (
-            <p className="text-sm text-muted-foreground">Loading catalogs…</p>
-          ) : availableQuery.isError ? (
-            <ErrorState
-              message={
-                availableQuery.error instanceof Error
-                  ? availableQuery.error.message
-                  : "Couldn't load catalogs"
-              }
-              onRetry={() => void availableQuery.refetch()}
-            />
-          ) : availableQuery.data?.length ? (
-            <div className="space-y-2">
-              {availableQuery.data.map((catalog) => (
-                <label
-                  key={catalog.id}
-                  className={cn(
-                    'flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors',
-
-                    selectedCatalogId === catalog.id && 'border-slate-900',
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="catalog"
-                    value={catalog.id}
-                    checked={selectedCatalogId === catalog.id}
-                    onChange={() => setSelectedCatalogId(catalog.id)}
-                  />
-
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium">
-                      {catalog.name}
-                    </span>
-
-                    <span className="block text-sm text-muted-foreground">
-                      {catalog.productCount === 1
-                        ? '1 product'
-                        : `${catalog.productCount} products`}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No existing commerce catalogs found. Create a new catalog instead.
-            </p>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSetupDialog(null);
-
-                setSelectedCatalogId('');
-              }}
-            >
-              Cancel
-            </Button>
-
-            <Button
-              disabled={!selectedCatalogId || connectMutation.isPending}
-              onClick={() => connectMutation.mutate(selectedCatalogId)}
-            >
-              {connectMutation.isPending ? 'Connecting…' : 'Connect'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/*
-      |--------------------------------------------------------------------------
-      | Create catalog dialog
-      |--------------------------------------------------------------------------
-      */}
-
-      <Dialog
-        open={setupDialog === 'create'}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSetupDialog(null);
-
-            setCatalogName('');
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create catalog</DialogTitle>
-
-            <DialogDescription>
-              Create a catalog for products and services shown to guests on
-              WhatsApp.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-
-              const name = catalogName.trim();
-
-              if (!name) {
-                return;
-              }
-
-              createCatalogMutation.mutate(name);
-            }}
-          >
-            <label
-              htmlFor="catalog-name"
-              className="mb-2 block text-sm font-medium"
-            >
-              Catalog name
-            </label>
-
-            <Input
-              id="catalog-name"
-              value={catalogName}
-              onChange={(event) => setCatalogName(event.target.value)}
-              placeholder="Hotel Services"
-              maxLength={100}
-              autoFocus
-              required
-            />
-
-            <DialogFooter className="mt-5">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={createCatalogMutation.isPending}
-                onClick={() => {
-                  setSetupDialog(null);
-
-                  setCatalogName('');
-                }}
-              >
-                Cancel
-              </Button>
-
-              <Button
-                type="submit"
-                disabled={
-                  !catalogName.trim() || createCatalogMutation.isPending
-                }
-              >
-                {createCatalogMutation.isPending
-                  ? 'Creating…'
-                  : 'Create catalog'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/*
-      |--------------------------------------------------------------------------
-      | Catalog settings
-      |--------------------------------------------------------------------------
-      */}
 
       {connection && activeCatalog && (
         <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
@@ -1105,12 +845,6 @@ export default function CataloguePage() {
         </Dialog>
       )}
 
-      {/*
-      |--------------------------------------------------------------------------
-      | Existing product dialogs
-      |--------------------------------------------------------------------------
-      */}
-
       <ItemFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
@@ -1122,7 +856,6 @@ export default function CataloguePage() {
           }
 
           setFormOpen(false);
-
           setDeleting([editing.id]);
         }}
       />
@@ -1154,7 +887,6 @@ export default function CataloguePage() {
           );
 
           setDeleting(null);
-
           setSelected(new Set());
         }}
       />
