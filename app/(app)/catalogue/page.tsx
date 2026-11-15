@@ -12,6 +12,7 @@ import {
   Settings2,
   ShoppingBag,
   Trash2,
+  Unlink,
   Utensils,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -53,6 +54,7 @@ import {
   connectWhatsAppCatalog,
   createCatalogueItem,
   deleteCatalogueItems,
+  disconnectWhatsAppCatalog,
   getAvailableCatalogs,
   getCatalogConnection,
   listCatalogueItems,
@@ -153,6 +155,32 @@ export default function CataloguePage() {
     onError: (error) => {
       toast.error(
         error instanceof Error ? error.message : "Couldn't connect catalog",
+      );
+    },
+  });
+
+  const disconnectCatalogMutation = useMutation({
+    mutationFn: disconnectWhatsAppCatalog,
+
+    onSuccess: async (nextConnection) => {
+      queryClient.setQueryData(catalogConnectionKey, nextConnection);
+
+      queryClient.removeQueries({
+        queryKey: ['whatsapp', 'catalog', catalogId, 'products'],
+      });
+
+      await queryClient.invalidateQueries({
+        queryKey: availableCatalogsKey,
+      });
+
+      setSettingsOpen(false);
+
+      toast.success('Catalog disconnected');
+    },
+
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Couldn't disconnect catalog",
       );
     },
   });
@@ -287,10 +315,11 @@ export default function CataloguePage() {
   }
 
   async function refreshCatalog() {
-    await Promise.all([
-      catalogQuery.refetch(),
-      availableCatalogsQuery.refetch(),
-    ]);
+    await catalogQuery.refetch();
+
+    if (needsCatalog) {
+      await availableCatalogsQuery.refetch();
+    }
   }
 
   const select = (item: CatalogueItem) => (
@@ -442,17 +471,13 @@ export default function CataloguePage() {
                   </div>
 
                   <Button
-                    disabled={
-                      connectCatalogMutation.isPending || catalog.connected
-                    }
+                    disabled={connectCatalogMutation.isPending}
                     onClick={() => connectCatalogMutation.mutate(catalog.id)}
                   >
-                    {catalog.connected
-                      ? 'Connected'
-                      : connectCatalogMutation.isPending &&
-                          connectCatalogMutation.variables === catalog.id
-                        ? 'Connecting...'
-                        : 'Connect'}
+                    {connectCatalogMutation.isPending &&
+                    connectCatalogMutation.variables === catalog.id
+                      ? 'Connecting...'
+                      : 'Connect'}
                   </Button>
                 </div>
               ))}
@@ -503,7 +528,9 @@ export default function CataloguePage() {
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
-                disabled={catalogQuery.isFetching}
+                disabled={
+                  catalogQuery.isFetching || disconnectCatalogMutation.isPending
+                }
                 onClick={() => void refreshCatalog()}
               >
                 <RefreshCw
@@ -518,7 +545,10 @@ export default function CataloguePage() {
               {connection.status === 'hidden' && (
                 <Button
                   variant="outline"
-                  disabled={settingsMutation.isPending}
+                  disabled={
+                    settingsMutation.isPending ||
+                    disconnectCatalogMutation.isPending
+                  }
                   onClick={() =>
                     settingsMutation.mutate({
                       catalogVisible: true,
@@ -529,9 +559,25 @@ export default function CataloguePage() {
                 </Button>
               )}
 
-              <Button variant="outline" onClick={() => setSettingsOpen(true)}>
+              <Button
+                variant="outline"
+                disabled={disconnectCatalogMutation.isPending}
+                onClick={() => setSettingsOpen(true)}
+              >
                 <Settings2 />
                 Catalog settings
+              </Button>
+
+              <Button
+                variant="outline"
+                disabled={disconnectCatalogMutation.isPending}
+                onClick={() => disconnectCatalogMutation.mutate()}
+              >
+                <Unlink />
+
+                {disconnectCatalogMutation.isPending
+                  ? 'Disconnecting...'
+                  : 'Disconnect'}
               </Button>
             </div>
           </div>
@@ -749,6 +795,7 @@ export default function CataloguePage() {
                 className="flex aspect-square flex-col items-center justify-center gap-2 self-start rounded-xl border-2 border-dashed bg-white text-muted-foreground transition-colors outline-none hover:border-slate-900 hover:text-slate-900 focus-visible:border-slate-900 focus-visible:ring-3 focus-visible:ring-slate-900/20"
               >
                 <Plus className="size-6" />
+
                 <span className="text-sm font-medium">Add item</span>
               </button>
 
@@ -895,6 +942,7 @@ export default function CataloguePage() {
           }
 
           setFormOpen(false);
+
           setDeleting([editing.id]);
         }}
       />

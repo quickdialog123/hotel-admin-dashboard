@@ -149,3 +149,11 @@ export function updateCatalogSettings(input: CatalogSettingsInput) {
     catalogSettingsInputSchema,
   );
 }
+
+export function disconnectWhatsAppCatalog() {
+  return postJson(
+    'whatsapp/catalogs/disconnect',
+    {},
+    catalogConnectionSchema,
+  );
+}
