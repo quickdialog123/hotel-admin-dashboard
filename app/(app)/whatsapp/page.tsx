@@ -87,7 +87,7 @@ export default function WhatsAppPage() {
           connection,
         )
 
-        toast.success(connection.status === "connected"
+        toast.success(connection.status === "CONNECTED"
           ? "WhatsApp connected"
           : "WhatsApp added. Verify your account to finish connecting.")
       },
@@ -184,7 +184,7 @@ export default function WhatsAppPage() {
           <div
             className={`rounded-2xl border p-8 ${
               data.status ===
-              "error"
+              "ERROR"
                 ? "border-red-200 bg-red-50/50"
                 : "bg-white"
             }`}
@@ -220,7 +220,7 @@ export default function WhatsAppPage() {
 
               <div className="flex gap-2">
               {data.status ===
-                "connected" ? (
+                "CONNECTED" ? (
                   <>
                     <Button
                       variant="outline"
@@ -274,7 +274,7 @@ export default function WhatsAppPage() {
                     {connectMutation.isPending
                       ? "Connecting…"
                       : data.status ===
-                          "error"
+                          'ERROR'
                         ? "Reconnect WhatsApp"
                         : "Connect WhatsApp"}
                   </Button>
@@ -283,7 +283,7 @@ export default function WhatsAppPage() {
             </div>
 
             {data.status ===
-              "error" && (
+              "ERROR" && (
               <p
                 role="alert"
                 className="mt-6 rounded-2xl border border-red-200 bg-white p-4 text-sm text-red-800"
@@ -295,7 +295,7 @@ export default function WhatsAppPage() {
             )}
 
             {data.status ===
-              "not_connected" && (
+              "NOT_CONNECTED" && (
               <p className="mt-6 max-w-xl text-sm text-muted-foreground">
                 Connect your
                 WhatsApp Business
@@ -310,7 +310,7 @@ export default function WhatsAppPage() {
               </p>
             )}
 
-            {data.status === "unverified" && (
+            {data.status === "UNVERIFIED" && (
               <p className="mt-6 max-w-xl text-sm text-muted-foreground">
                 Your WhatsApp account was added. Enter its six-digit PIN to finish connecting.
               </p>
@@ -324,7 +324,7 @@ export default function WhatsAppPage() {
             )}
 
             {data.status ===
-              "connected" && (
+              "CONNECTED" && (
               <dl className="mt-8 grid gap-6 border-t pt-6 sm:grid-cols-2 lg:grid-cols-4">
                 <Field label="WhatsApp number">
                   {

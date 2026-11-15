@@ -107,3 +107,24 @@ const data = await apiClient
 
 return responseSchema.parse(data);
 }
+
+export async function patchJson<
+  TResponse,
+  TBody,
+>(
+  url: string,
+  body: TBody,
+  responseSchema: z.ZodType<TResponse>,
+  inputSchema?: z.ZodType<TBody>,
+): Promise<TResponse> {
+  const json =
+    inputSchema
+      ? inputSchema.parse(body)
+      : body
+
+  const data = await apiClient
+    .patch(url, { json })
+    .json()
+
+  return responseSchema.parse(data)
+}
