@@ -92,7 +92,6 @@ export const availableCatalogSchema = z.object({
   name: z.string(),
   vertical: z.string().nullable(),
   productCount: z.number(),
-  connected: z.boolean(),
 });
 
 export const availableCatalogsSchema = z.array(availableCatalogSchema);
