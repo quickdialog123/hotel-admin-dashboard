@@ -17,6 +17,22 @@ statusCodes: [408, 429, 500, 502, 503, 504],
 },
 
 hooks: {
+beforeError: [
+({ error }) => {
+  if (
+    "data" in error &&
+    typeof error.data === "object" &&
+    error.data !== null &&
+    "message" in error.data &&
+    typeof error.data.message === "string"
+  ) {
+    error.message = error.data.message;
+  }
+
+  return error;
+},
+],
+
 beforeRequest: [
 async ({ request, options }) => {
 const session = await getSession({ broadcast: false });
@@ -124,6 +140,17 @@ export async function patchJson<
 
   const data = await apiClient
     .patch(url, { json })
+    .json()
+
+  return responseSchema.parse(data)
+}
+
+export async function deleteJson<TResponse>(
+  url: string,
+  responseSchema: z.ZodType<TResponse>,
+): Promise<TResponse> {
+  const data = await apiClient
+    .delete(url)
     .json()
 
   return responseSchema.parse(data)
