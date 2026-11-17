@@ -5,8 +5,12 @@ import { z } from "zod"
 const serverEnvSchema = z.object({
   AUTH_SECRET: z.string().min(32),
   FRONTEND_ORIGIN: z.string().url().refine((value) => {
-    const url = new URL(value)
-    return url.origin === value
+    try {
+      const url = new URL(value)
+      return url.origin === value
+    } catch {
+      return false
+    }
   }, "Must be an origin without a path, query, or fragment"),
 })
 

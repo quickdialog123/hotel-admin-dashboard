@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Check,
   LayoutGrid,
   List,
   MessageCircle,
@@ -13,7 +12,6 @@ import {
   ShoppingBag,
   Trash2,
   Unlink,
-  Utensils,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -29,11 +27,9 @@ import {
 } from '@/components/app/states';
 import {
   ItemFormDialog,
-  STATUS_OPTIONS,
   Thumb,
   type ItemDraft,
 } from '@/components/catalogue/item-form-dialog';
-import { TagList } from '@/components/catalogue/tag-list';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -42,32 +38,30 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import {
-  CATALOGUE_CATEGORIES,
+  catalogueItemInputSchema,
+  catalogueItemUpdateSchema,
   connectWhatsAppCatalog,
   createCatalogueItem,
-  deleteCatalogueItems,
+  deleteCatalogueItem,
   disconnectWhatsAppCatalog,
+  getCatalogueOperation,
   getAvailableCatalogs,
   getCatalogConnection,
   listCatalogueItems,
   updateCatalogueItem,
-  updateCatalogueItemsCategory,
   updateCatalogSettings,
   type CatalogueItem,
+  type CatalogueItemInput,
+  type CatalogueItemUpdate,
+  type CatalogueOperation,
 } from '@/lib/api/catalogue';
 import { getWabaConnection } from '@/lib/api/waba';
-import { formatPrice } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-type Sort = 'updated' | 'name' | 'price';
+type Sort = 'name' | 'price';
+type PendingOperation = { catalogId: string; handle: string };
 
 const whatsappConnectionKey = ['whatsapp', 'connection'] as const;
 
@@ -75,16 +69,30 @@ const catalogConnectionKey = ['whatsapp', 'catalog', 'connection'] as const;
 
 const availableCatalogsKey = ['whatsapp', 'catalog', 'available'] as const;
 
-function StatusBadge({ status }: { status: CatalogueItem['status'] }) {
-  if (status === 'active') {
-    return null;
-  }
+function AvailabilityBadge({ availability }: { availability?: string | null }) {
+  if (!availability) return null;
+  const tone = availability === 'in stock'
+    ? 'solid'
+    : availability === 'out of stock' || availability === 'discontinued'
+      ? 'error'
+      : 'neutral';
+  return <StatusPill tone={tone}>{availability}</StatusPill>;
+}
 
-  return (
-    <StatusPill tone={status === 'draft' ? 'neutral' : 'error'}>
-      {status === 'draft' ? 'Draft' : 'Out of stock'}
-    </StatusPill>
-  );
+function priceAmount(price?: string | null) {
+  const amount = Number.parseFloat(price ?? '');
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function operationWarnings(operation: CatalogueOperation) {
+  if (operation.warnings.length === 0) return;
+  const warning = operation.warnings[0];
+  const message = typeof warning === 'string'
+    ? warning
+    : typeof warning === 'object' && warning !== null && 'message' in warning && typeof warning.message === 'string'
+      ? warning.message
+      : 'The product operation completed with a Meta warning.';
+  toast.warning(message);
 }
 
 export default function CataloguePage() {
@@ -127,15 +135,20 @@ export default function CataloguePage() {
 
   const productsQuery = useQuery({
     queryKey: ['whatsapp', 'catalog', catalogId, 'products'],
-    queryFn: listCatalogueItems,
+    queryFn: () => catalogId ? listCatalogueItems(catalogId) : Promise.resolve({ data: [], paging: undefined }),
     enabled: Boolean(catalogId),
   });
 
-  const data = catalogId ? productsQuery.data : undefined;
+  const data = catalogId ? productsQuery.data?.data : undefined;
 
-  async function refreshProducts() {
+  const [pendingOperation, setPendingOperation] = useState<PendingOperation | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  async function refreshProducts(catalogueId = catalogId) {
+    if (!catalogueId) return;
     await queryClient.invalidateQueries({
-      queryKey: ['whatsapp', 'catalog', catalogId, 'products'],
+      queryKey: ['whatsapp', 'catalog', catalogueId, 'products'],
     });
   }
 
@@ -202,86 +215,45 @@ export default function CataloguePage() {
   });
 
   const createItemMutation = useMutation({
-    mutationFn: createCatalogueItem,
-    onSuccess: refreshProducts,
+    mutationFn: ({ catalogueId, input }: { catalogueId: string; input: CatalogueItemInput }) =>
+      createCatalogueItem(catalogueId, input),
   });
 
   const updateItemMutation = useMutation({
-    mutationFn: ({ id, draft }: { id: string; draft: ItemDraft }) =>
-      updateCatalogueItem(id, draft),
-
-    onSuccess: refreshProducts,
+    mutationFn: ({ catalogueId, productId, input }: { catalogueId: string; productId: string; input: CatalogueItemUpdate }) =>
+      updateCatalogueItem(catalogueId, productId, input),
   });
 
-  const deleteItemsMutation = useMutation({
-    mutationFn: deleteCatalogueItems,
-    onSuccess: refreshProducts,
+  const deleteItemMutation = useMutation({
+    mutationFn: ({ catalogueId, productId }: { catalogueId: string; productId: string }) =>
+      deleteCatalogueItem(catalogueId, productId),
   });
 
-  const changeCategoryMutation = useMutation({
-    mutationFn: ({ ids, category }: { ids: string[]; category: string }) =>
-      updateCatalogueItemsCategory(ids, category),
-
-    onSuccess: refreshProducts,
-  });
-
-  const [category, setCategory] = useState('all');
-
-  const [status, setStatus] = useState('all');
-
-  const [sort, setSort] = useState<Sort>('updated');
+  const [sort, setSort] = useState<Sort>('name');
 
   const [view, setView] = useState<'grid' | 'list'>('grid');
-
-  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [formOpen, setFormOpen] = useState(false);
 
   const [editing, setEditing] = useState<CatalogueItem | null>(null);
 
-  const [deleting, setDeleting] = useState<string[] | null>(null);
+  const [deleting, setDeleting] = useState<CatalogueItem | null>(null);
 
+  // Clear any product dialog tied to the previous connected catalog.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    setSelected(new Set());
     setEditing(null);
     setFormOpen(false);
+    setDeleting(null);
   }, [catalogId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const items = useMemo(() => {
-    const rows = (data ?? []).filter(
-      (item) =>
-        (category === 'all' || item.category === category) &&
-        (status === 'all' || item.status === status),
-    );
-
-    return rows.sort((a, b) => {
-      if (sort === 'name') {
-        return a.name.localeCompare(b.name);
-      }
-
-      if (sort === 'price') {
-        return a.priceCents - b.priceCents;
-      }
-
-      return b.updatedAt.localeCompare(a.updatedAt);
-    });
-  }, [data, category, status, sort]);
-
-  const selecting = selected.size > 0;
-
-  function toggle(id: string) {
-    setSelected((current) => {
-      const next = new Set(current);
-
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-
-      return next;
-    });
-  }
+    const rows = [...(data ?? [])];
+    return rows.sort((a, b) => sort === 'name'
+      ? a.name.localeCompare(b.name)
+      : priceAmount(a.price) - priceAmount(b.price));
+  }, [data, sort]);
 
   function openAdd() {
     setEditing(null);
@@ -293,24 +265,113 @@ export default function CataloguePage() {
     setFormOpen(true);
   }
 
+  async function finishOperation(catalogueId: string, operation: CatalogueOperation) {
+    operationWarnings(operation);
+    if (operation.status === 'finished') {
+      setPendingOperation(null);
+      toast.success('Catalogue product updated');
+      await refreshProducts(catalogueId);
+      return;
+    }
+
+    setPendingOperation({ catalogId: catalogueId, handle: operation.handle });
+    toast.info('Meta is still processing this change. Refresh to check its status.');
+  }
+
   async function save(draft: ItemDraft) {
+    if (!catalogId) throw new Error('No connected catalog');
     try {
       if (editing) {
-        await updateItemMutation.mutateAsync({
-          id: editing.id,
-          draft,
+        const original = {
+          name: editing.name,
+          description: editing.description ?? '',
+          productUrl: editing.productUrl ?? '',
+          imageUrl: editing.imageUrl ?? '',
+          price: editing.price?.match(/^(.+?)\s+[A-Z]{3}$/)?.[1] ?? editing.price ?? '',
+          currency: editing.currency ?? editing.price?.match(/\s+([A-Z]{3})$/)?.[1] ?? 'USD',
+          availability: editing.availability ?? 'in stock',
+          brand: editing.brand ?? '',
+          condition: editing.condition ?? 'new',
+        };
+        const changes: Record<string, string> = {};
+        for (const key of Object.keys(draft) as Array<keyof ItemDraft>) {
+          if (draft[key].trim() !== original[key] && draft[key].trim()) changes[key] = draft[key].trim();
+        }
+        if (draft.price !== original.price || draft.currency !== original.currency) {
+          if (draft.price.trim()) changes.price = draft.price.trim();
+          if (draft.currency.trim()) changes.currency = draft.currency.trim();
+        }
+        const input = catalogueItemUpdateSchema.parse(changes);
+        const operation = await updateItemMutation.mutateAsync({
+          catalogueId: catalogId,
+          productId: editing.productId,
+          input,
         });
+        setFormOpen(false);
+        await finishOperation(catalogId, operation);
       } else {
-        await createItemMutation.mutateAsync(draft);
+        const input = catalogueItemInputSchema.parse(draft);
+        const operation = await createItemMutation.mutateAsync({ catalogueId: catalogId, input });
+        setFormOpen(false);
+        await finishOperation(catalogId, operation);
       }
-
-      toast.success(editing ? 'Item updated' : 'Item added');
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Couldn't save item",
+        error instanceof Error ? error.message : "Couldn't save product",
       );
 
       throw error;
+    }
+  }
+
+  async function remove(item: CatalogueItem) {
+    if (!catalogId) return;
+    try {
+      const operation = await deleteItemMutation.mutateAsync({
+        catalogueId: catalogId,
+        productId: item.productId,
+      });
+      setDeleting(null);
+      await finishOperation(catalogId, operation);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't delete product");
+      throw error;
+    }
+  }
+
+  async function checkOperation() {
+    if (!pendingOperation || processing) return;
+    setProcessing(true);
+    try {
+      const operation = await getCatalogueOperation(pendingOperation.catalogId, pendingOperation.handle);
+      operationWarnings(operation);
+      if (operation.status === 'finished') {
+        setPendingOperation(null);
+        toast.success('Catalogue product updated');
+        await refreshProducts(pendingOperation.catalogId);
+      } else {
+        toast.info('Meta is still processing this change.');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't check operation status");
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  async function loadNextPage() {
+    if (!catalogId || !productsQuery.data?.paging?.cursors?.after || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = await listCatalogueItems(catalogId, productsQuery.data.paging.cursors.after);
+      queryClient.setQueryData(['whatsapp', 'catalog', catalogId, 'products'], (current: typeof productsQuery.data) => current ? {
+        data: [...current.data, ...nextPage.data],
+        paging: nextPage.paging,
+      } : nextPage);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't load more products");
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -320,28 +381,11 @@ export default function CataloguePage() {
     if (needsCatalog) {
       await availableCatalogsQuery.refetch();
     }
-  }
 
-  const select = (item: CatalogueItem) => (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={selected.has(item.id)}
-      aria-label={`Select ${item.name}`}
-      onClick={(event) => {
-        event.stopPropagation();
-        toggle(item.id);
-      }}
-      className={cn(
-        'absolute top-2.5 right-2.5 flex size-7 items-center justify-center rounded-full border-2 border-white bg-slate-900 text-white shadow-sm transition-opacity outline-none focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-slate-900/40',
-        selected.has(item.id)
-          ? 'opacity-100'
-          : 'opacity-0 group-hover:opacity-100',
-      )}
-    >
-      <Check className="size-4" />
-    </button>
-  );
+    if (pendingOperation) {
+      await checkOperation();
+    }
+  }
 
   return (
     <>
@@ -529,14 +573,14 @@ export default function CataloguePage() {
               <Button
                 variant="outline"
                 disabled={
-                  catalogQuery.isFetching || disconnectCatalogMutation.isPending
+                  catalogQuery.isFetching || disconnectCatalogMutation.isPending || processing
                 }
                 onClick={() => void refreshCatalog()}
               >
                 <RefreshCw
                   className={cn(
                     'size-4',
-                    catalogQuery.isFetching && 'animate-spin',
+                    (catalogQuery.isFetching || processing) && 'animate-spin',
                   )}
                 />
                 Refresh
@@ -583,45 +627,12 @@ export default function CataloguePage() {
           </div>
 
           <div className="mb-5 flex flex-wrap items-center gap-2">
-            <PillSelect
-              label="Filter by category"
-              value={category}
-              onChange={setCategory}
-              options={[
-                {
-                  value: 'all',
-                  label: 'All categories',
-                },
-                ...CATALOGUE_CATEGORIES.map((category) => ({
-                  value: category,
-                  label: category,
-                })),
-              ]}
-            />
-
-            <PillSelect
-              label="Filter by status"
-              value={status}
-              onChange={setStatus}
-              options={[
-                {
-                  value: 'all',
-                  label: 'All statuses',
-                },
-                ...STATUS_OPTIONS,
-              ]}
-            />
-
             <PillSelect<Sort>
               label="Sort"
               prefix="Sort: "
               value={sort}
               onChange={setSort}
               options={[
-                {
-                  value: 'updated',
-                  label: 'Last updated',
-                },
                 {
                   value: 'name',
                   label: 'Name',
@@ -662,213 +673,69 @@ export default function CataloguePage() {
             </div>
           </div>
 
-          {selecting && (
-            <div
-              role="region"
-              aria-label="Bulk actions"
-              className="sticky top-20 z-30 mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-white shadow-sm"
-            >
-              <span className="text-sm font-medium">
-                {selected.size} selected
-              </span>
-
-              <div className="ml-auto flex items-center gap-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger className="h-8 rounded-lg bg-white/10 px-3.5 text-sm font-medium outline-none hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white/60">
-                    Change category
-                  </DropdownMenuTrigger>
-
-                  <DropdownMenuContent align="end" className="w-44">
-                    {CATALOGUE_CATEGORIES.map((nextCategory) => (
-                      <DropdownMenuItem
-                        key={nextCategory}
-                        onClick={async () => {
-                          await changeCategoryMutation.mutateAsync({
-                            ids: [...selected],
-                            category: nextCategory,
-                          });
-
-                          toast.success(
-                            `Moved ${selected.size} item${
-                              selected.size > 1 ? 's' : ''
-                            } to ${nextCategory}`,
-                          );
-
-                          setSelected(new Set());
-                        }}
-                      >
-                        {nextCategory}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <button
-                  type="button"
-                  onClick={() => setDeleting([...selected])}
-                  className="flex h-8 items-center gap-1.5 rounded-lg bg-white/10 px-3.5 text-sm font-medium hover:bg-red-500/80 focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:outline-none"
-                >
-                  <Trash2 className="size-3.5" />
-                  Delete
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelected(new Set())}
-                  className="h-8 rounded-lg px-3 text-sm text-white/70 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:outline-none"
-                >
-                  Clear
-                </button>
-              </div>
+          {pendingOperation && (
+            <div role="status" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border bg-white px-4 py-3 text-sm">
+              <span>A Meta catalog operation is still processing. Use Refresh to check its status.</span>
             </div>
           )}
 
           {productsQuery.isError ? (
             <ErrorState
-              message={
-                productsQuery.error instanceof Error
-                  ? productsQuery.error.message
-                  : "Couldn't load products"
-              }
+              message={productsQuery.error instanceof Error ? productsQuery.error.message : "Couldn't load products"}
               onRetry={() => void productsQuery.refetch()}
             />
           ) : productsQuery.isPending || !data ? (
             <CardGridSkeleton />
           ) : data.length === 0 ? (
             <EmptyState
-              icon={<Utensils className="size-5" />}
-              title="No catalogue items yet"
-              description="Add your first item to make it available to guests on WhatsApp."
-              action={
-                <Button onClick={openAdd}>
-                  <Plus />
-                  Add item
-                </Button>
-              }
+              icon={<ShoppingBag className="size-5" />}
+              title="No products in this catalog yet"
+              description="Add your first product to make it available in your WhatsApp catalog."
+              action={<Button onClick={openAdd}><Plus /> Add product</Button>}
             />
           ) : view === 'grid' ? (
             <div className="grid grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-4">
               {items.map((item) => (
-                <div key={item.id} className="group relative">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      selecting ? toggle(item.id) : openEdit(item)
-                    }
-                    className="block w-full text-left outline-none focus-visible:ring-3 focus-visible:ring-slate-900/30"
-                  >
-                    <div
-                      className={cn(
-                        'relative overflow-hidden rounded-xl border bg-slate-100',
-                        selected.has(item.id) && 'ring-2 ring-slate-900',
-                      )}
-                    >
-                      <Thumb
-                        url={item.photoUrl}
-                        name={item.name}
-                        className="aspect-square w-full object-cover"
-                      />
-
-                      <div className="absolute bottom-2.5 left-2.5">
-                        <StatusBadge status={item.status} />
-                      </div>
+                <div key={item.productId} className="group relative">
+                  <button type="button" onClick={() => openEdit(item)} className="block w-full text-left outline-none focus-visible:ring-3 focus-visible:ring-slate-900/30">
+                    <div className="relative overflow-hidden rounded-xl border bg-slate-100">
+                      <Thumb url={item.imageUrl} name={item.name} className="aspect-square w-full object-cover" />
+                      <div className="absolute bottom-2.5 left-2.5"><AvailabilityBadge availability={item.availability} /></div>
                     </div>
-
                     <p className="mt-2.5 truncate font-semibold">{item.name}</p>
-
-                    <p className="text-sm text-muted-foreground">
-                      {formatPrice(item.priceCents)} · {item.category}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{item.price ?? 'Price unavailable'}{item.brand ? ` · ${item.brand}` : ''}</p>
                   </button>
-
-                  <div className="mt-2">
-                    <TagList tags={item.tags} />
-                  </div>
-
-                  {select(item)}
+                  <button type="button" aria-label={`Delete ${item.name}`} disabled={processing} onClick={() => setDeleting(item)} className="absolute top-2.5 right-2.5 flex size-8 items-center justify-center rounded-full border bg-white/95 text-slate-600 shadow-sm opacity-0 transition-opacity hover:text-red-600 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/40 group-hover:opacity-100 disabled:opacity-50"><Trash2 className="size-4" /></button>
                 </div>
               ))}
-
-              <button
-                type="button"
-                onClick={openAdd}
-                className="flex aspect-square flex-col items-center justify-center gap-2 self-start rounded-xl border-2 border-dashed bg-white text-muted-foreground transition-colors outline-none hover:border-slate-900 hover:text-slate-900 focus-visible:border-slate-900 focus-visible:ring-3 focus-visible:ring-slate-900/20"
-              >
-                <Plus className="size-6" />
-
-                <span className="text-sm font-medium">Add item</span>
+              <button type="button" onClick={openAdd} className="flex aspect-square flex-col items-center justify-center gap-2 self-start rounded-xl border-2 border-dashed bg-white text-muted-foreground transition-colors outline-none hover:border-slate-900 hover:text-slate-900 focus-visible:border-slate-900 focus-visible:ring-3 focus-visible:ring-slate-900/20">
+                <Plus className="size-6" /><span className="text-sm font-medium">Add product</span>
               </button>
-
-              {items.length === 0 && (
-                <p className="col-span-full text-sm text-muted-foreground">
-                  No items match these filters.
-                </p>
-              )}
             </div>
           ) : (
             <ul className="overflow-hidden rounded-xl border bg-white">
               {items.map((item) => (
-                <li
-                  key={item.id}
-                  className="group relative flex items-center gap-4 border-b px-4 py-3 last:border-b-0"
-                >
-                  <button
-                    type="button"
-                    role="checkbox"
-                    aria-checked={selected.has(item.id)}
-                    aria-label={`Select ${item.name}`}
-                    onClick={() => toggle(item.id)}
-                    className={cn(
-                      'flex size-6 shrink-0 items-center justify-center rounded-full border-2 outline-none focus-visible:ring-3 focus-visible:ring-slate-900/30',
-                      selected.has(item.id)
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-300 text-transparent',
-                    )}
-                  >
-                    <Check className="size-3.5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => openEdit(item)}
-                    className="flex min-w-0 flex-1 items-center gap-4 text-left outline-none focus-visible:underline"
-                  >
-                    <Thumb
-                      url={item.photoUrl}
-                      name={item.name}
-                      className="size-12 shrink-0 rounded-lg object-cover"
-                    />
-
+                <li key={item.productId} className="flex items-center gap-4 border-b px-4 py-3 last:border-b-0">
+                  <button type="button" onClick={() => openEdit(item)} className="flex min-w-0 flex-1 items-center gap-4 text-left outline-none focus-visible:underline">
+                    <Thumb url={item.imageUrl} name={item.name} className="size-12 shrink-0 rounded-lg object-cover" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-semibold">
-                        {item.name}
-                      </span>
-
-                      <span className="block text-sm text-muted-foreground">
-                        {formatPrice(item.priceCents)} · {item.category}
-                      </span>
+                      <span className="block truncate font-semibold">{item.name}</span>
+                      <span className="block text-sm text-muted-foreground">{item.price ?? 'Price unavailable'}{item.brand ? ` · ${item.brand}` : ''}</span>
                     </span>
-
-                    <span className="hidden sm:block">
-                      <TagList tags={item.tags} max={4} />
-                    </span>
-
-                    <StatusBadge status={item.status} />
+                    <AvailabilityBadge availability={item.availability} />
                   </button>
+                  <button type="button" aria-label={`Delete ${item.name}`} disabled={processing} onClick={() => setDeleting(item)} className="flex size-8 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30 disabled:opacity-50"><Trash2 className="size-4" /></button>
                 </li>
               ))}
-
-              <li>
-                <button
-                  type="button"
-                  onClick={openAdd}
-                  className="flex w-full items-center justify-center gap-2 border-t border-dashed px-4 py-4 text-sm font-medium text-muted-foreground hover:bg-slate-50 hover:text-slate-900 focus-visible:bg-slate-50 focus-visible:outline-none"
-                >
-                  <Plus className="size-4" />
-                  Add item
-                </button>
-              </li>
             </ul>
+          )}
+
+          {productsQuery.data?.paging?.cursors?.after && (
+            <div className="mt-5 flex justify-center">
+              <Button variant="outline" disabled={loadingMore} onClick={() => void loadNextPage()}>
+                {loadingMore ? 'Loading…' : 'Load more products'}
+              </Button>
+            </div>
           )}
         </>
       )}
@@ -943,7 +810,7 @@ export default function CataloguePage() {
 
           setFormOpen(false);
 
-          setDeleting([editing.id]);
+          setDeleting(editing);
         }}
       />
 
@@ -954,27 +821,14 @@ export default function CataloguePage() {
             setDeleting(null);
           }
         }}
-        title={
-          deleting && deleting.length > 1
-            ? `Delete ${deleting.length} items?`
-            : 'Delete this item?'
-        }
-        description="This removes the item from your catalogue. This can't be undone."
+        title="Delete this product?"
+        description="This submits a deletion to Meta and can’t be undone."
         onConfirm={async () => {
           if (!deleting) {
             return;
           }
 
-          await deleteItemsMutation.mutateAsync(deleting);
-
-          toast.success(
-            deleting.length > 1
-              ? `${deleting.length} items deleted`
-              : 'Item deleted',
-          );
-
-          setDeleting(null);
-          setSelected(new Set());
+          await remove(deleting);
         }}
       />
     </>
