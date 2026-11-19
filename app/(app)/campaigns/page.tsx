@@ -9,17 +9,17 @@ import { PageHeader } from "@/components/app/page-header"
 import { StatusPill, type PillTone } from "@/components/app/status-pill"
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/app/states"
 import { Button, buttonVariants } from "@/components/ui/button"
-import { deleteTemplate, listTemplates, type MessageTemplate, type TemplateStatus } from "@/lib/api/broadcasts"
+import { deleteTemplate, listTemplates, type MessageTemplate } from "@/lib/api/broadcasts"
+import { deleteTemplateDraft, listTemplateDrafts, type TemplateDraft } from "@/lib/api/template-drafts"
 import { useAsync } from "@/lib/hooks/use-async"
-import { timeAgo } from "@/lib/format"
 
-const TEMPLATE_TONE: Record<TemplateStatus, PillTone> = { APPROVED: "solid", PENDING: "progress", REJECTED: "error", DRAFT: "neutral" }
-const TEMPLATE_LABEL: Record<TemplateStatus, string> = { APPROVED: "Approved", PENDING: "Pending approval", REJECTED: "Rejected", DRAFT: "Draft" }
+function statusTone(status: string): PillTone { return status === "APPROVED" ? "solid" : status === "REJECTED" ? "error" : status === "PENDING" ? "progress" : "neutral" }
 const CATEGORY_LABEL = { MARKETING: "Marketing", UTILITY: "Utility", AUTHENTICATION: "Authentication" }
 
 export default function CampaignsPage() {
   const { data, error, reload } = useAsync(listTemplates)
-  const [deleting, setDeleting] = useState<MessageTemplate | null>(null)
+  const drafts = useAsync(listTemplateDrafts)
+  const [deleting, setDeleting] = useState<MessageTemplate | TemplateDraft | null>(null)
 
   return (
     <>
@@ -33,11 +33,11 @@ export default function CampaignsPage() {
         }
       />
 
-      {error ? (
-        <ErrorState message={error} onRetry={reload} />
-      ) : !data ? (
+      {error || drafts.error ? (
+        <ErrorState message={error ?? drafts.error ?? "Unable to load templates"} onRetry={() => { reload(); drafts.reload() }} />
+      ) : !data || !drafts.data ? (
         <ListSkeleton />
-      ) : data.length === 0 ? (
+      ) : data.length === 0 && drafts.data.length === 0 ? (
         <EmptyState
           icon={<FileText className="size-5" />}
           title="No campaigns yet"
@@ -46,17 +46,16 @@ export default function CampaignsPage() {
         />
       ) : (
         <ul className="overflow-hidden rounded-2xl border bg-white">
-          {data.map((t) => (
-            <li key={t.id} className="flex items-center gap-4 border-b px-5 py-4 last:border-b-0">
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{t.name}</p>
+          {[...drafts.data, ...data].map((t) => (
+            <li key={"localId" in t ? t.localId : t.id} className="flex items-center gap-4 border-b px-5 py-4 last:border-b-0">
+              <Link href={"localId" in t ? `/campaigns/${t.localId}` : `/campaigns/${t.id}`} className="min-w-0 flex-1 rounded-md outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+                <span className="block truncate font-semibold">{t.name}</span>
                 <p className="mt-0.5 truncate text-sm text-muted-foreground">
                   {CATEGORY_LABEL[t.category]} · {t.language} · {t.body}
                 </p>
-                {t.status === "REJECTED" && t.rejectionReason && <p className="mt-1 text-sm text-red-700">{t.rejectionReason}</p>}
-              </div>
-              <StatusPill tone={TEMPLATE_TONE[t.status]}>{TEMPLATE_LABEL[t.status]}</StatusPill>
-              <span className="hidden w-16 text-right text-xs text-muted-foreground sm:block">{timeAgo(t.updatedAt)}</span>
+                {"rejectionReason" in t && t.rejectionReason && <p className="mt-1 text-sm text-red-700">{t.rejectionReason}</p>}
+              </Link>
+              <StatusPill tone={"localId" in t ? "neutral" : statusTone(t.status)}>{"localId" in t ? "Local draft" : t.status}</StatusPill>
               <Button variant="ghost" size="icon" aria-label={`Delete ${t.name}`} onClick={() => setDeleting(t)}>
                 <Trash2 />
               </Button>
@@ -69,12 +68,14 @@ export default function CampaignsPage() {
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(null)}
         title="Delete this campaign?"
-        description={`"${deleting?.name}" will be removed. Past broadcasts that used it are unaffected.`}
+        description={`"${deleting?.name}" will be deleted${deleting && "localId" in deleting ? " from this browser" : " from Meta"}.`}
         onConfirm={async () => {
           if (!deleting) return
-          await deleteTemplate(deleting.id)
-          toast.success("Campaign deleted")
-          reload()
+          try {
+            if ("localId" in deleting) { await deleteTemplateDraft(deleting.localId); drafts.reload() }
+            else { await deleteTemplate(deleting.id); reload() }
+            toast.success("Campaign deleted")
+          } catch (error) { toast.error(error instanceof Error ? error.message : "Couldn't delete campaign"); throw error }
         }}
       />
     </>

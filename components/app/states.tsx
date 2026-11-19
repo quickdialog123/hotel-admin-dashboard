@@ -1,6 +1,7 @@
 import { AlertTriangle, Inbox } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import Link from "next/link"
 
 export function EmptyState({ title, description, action, icon }: { title: string; description?: string; action?: React.ReactNode; icon?: React.ReactNode }) {
   return (
@@ -21,7 +22,8 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
       </div>
       <p className="font-medium text-red-900">Something went wrong</p>
       <p className="mt-1 max-w-sm text-sm text-red-800/80">{message}</p>
-      {onRetry && (
+      {message.includes("Sign in again") && <Link href="/login" className="mt-4 rounded-lg border bg-white px-4 py-2 text-sm font-medium">Sign in</Link>}
+      {onRetry && !message.includes("Sign in again") && (
         <Button variant="outline" className="mt-4" onClick={onRetry}>
           Try again
         </Button>
