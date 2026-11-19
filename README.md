@@ -6,6 +6,10 @@ Admin dashboard for a hotel's AI-powered WhatsApp receptionist. Next.js (App Rou
 npm install && npm run dev   # http://localhost:3000  (any email/password works)
 ```
 
+Set `NEXT_PUBLIC_FRONTEND_ORIGIN` to the same value as `FRONTEND_ORIGIN`.
+Automatic sign-out redirects to that origin's `/login` page. Restart Next.js
+after changing either value.
+
 ## Folder structure
 
 ```

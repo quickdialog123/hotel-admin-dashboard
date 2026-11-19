@@ -26,12 +26,14 @@ export default function NewBroadcastPage() {
   const [touched, setTouched] = useState(false)
   const [confirm, setConfirm] = useState(false)
 
-  const approved = useMemo(() => (templates.data ?? []).filter((t) => t.status === "APPROVED"), [templates.data])
+  const approved = useMemo(() => (templates.data ?? []).filter((t) => t.status === "APPROVED" && t.broadcastEligible), [templates.data])
   const template = approved.find((t) => t.id === templateId) ?? null
   const segment = segments.data?.find((s) => s.id === segmentId) ?? null
-  const vars = template ? extractVariables(template.body + " " + (template.header?.text ?? "")) : []
+  const vars = template ? extractVariables(template.body + " " + (template.header?.text ?? "")).sort((a, b) => Number(a) - Number(b)) : []
+  const positional = vars.every((v) => /^[1-9]\d*$/.test(v))
+  const ambiguousComponents = !!template?.header?.text && extractVariables(template.header.text).length > 0 && extractVariables(template.body).length > 0
   const varsOk = vars.every((v) => values[v]?.trim())
-  const canSend = !!template && !!segment && varsOk
+  const canSend = !!template && !!segment && varsOk && positional && !ambiguousComponents
 
   const error = templates.error ?? segments.error
   const back = (
@@ -76,6 +78,7 @@ export default function NewBroadcastPage() {
               ))}
             </section>
           )}
+          {template && (!positional || ambiguousComponents) && <p role="alert" className="text-sm text-destructive">This template cannot be sent by the current broadcast flow because its variable positions cannot be mapped reliably.</p>}
 
           <section className="space-y-3 rounded-2xl border bg-white p-6">
             <h2 className="font-semibold">{vars.length > 0 ? "3" : "2"}. Recipients</h2>

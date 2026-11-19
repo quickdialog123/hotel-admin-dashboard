@@ -1,9 +1,23 @@
-import ky from "ky";
-import { getSession } from "next-auth/react";
+import ky, { HTTPError } from "ky";
+import { getSession, signOut } from "next-auth/react";
 import type { z } from "zod";
 
 import { clientEnv } from "@/lib/env/client";
 import { refreshAccessToken } from "@/lib/auth/auth.api";
+
+let sessionEndPromise: Promise<unknown> | null = null;
+
+function endSession() {
+  if (!sessionEndPromise) {
+    sessionEndPromise = signOut({
+      callbackUrl: new URL("/login", clientEnv.NEXT_PUBLIC_FRONTEND_ORIGIN).href,
+    }).finally(() => {
+      sessionEndPromise = null;
+    });
+  }
+
+  return sessionEndPromise;
+}
 
 export const apiClient = ky.create({
 prefix: clientEnv.NEXT_PUBLIC_API_BASE_URL,
@@ -37,7 +51,10 @@ beforeRequest: [
 async ({ request, options }) => {
 const session = await getSession({ broadcast: false });
 
-    if (!session?.accessToken) return;
+    if (!session?.accessToken) {
+      await endSession();
+      throw new Error("Your session has ended. Sign in again.");
+    }
 
     request.headers.set(
       "Authorization",
@@ -53,8 +70,7 @@ afterResponse: [
   async ({ request, options, response, retryCount }) => {
     if (
       response.status !== 401 ||
-      retryCount > 0 ||
-      request.method !== "GET"
+      retryCount > 0
     ) {
       return;
     }
@@ -66,6 +82,7 @@ afterResponse: [
     const userId = options.context.userId;
 
     if (!previousToken || typeof userId !== "string") {
+      await endSession();
       return;
     }
 
@@ -73,10 +90,8 @@ afterResponse: [
       const accessToken = await refreshAccessToken(previousToken);
       const session = await getSession({ broadcast: false });
 
-      if (
-        session?.user.userId !== userId ||
-        session.accessToken !== accessToken
-      ) {
+      if (session?.user.userId !== userId) {
+        await endSession();
         return;
       }
 
@@ -85,11 +100,21 @@ afterResponse: [
         `Bearer ${accessToken}`,
       );
 
-      return ky(request, {
+      const retriedResponse = await ky(request, {
         retry: { limit: 0 },
+        throwHttpErrors: false,
       });
-    } catch {
-      // Leave the original 401 response unchanged.
+      if (retriedResponse.status === 401) await endSession();
+      return retriedResponse;
+    } catch (error) {
+      if (
+        (error instanceof HTTPError && [401, 403].includes(error.response.status)) ||
+        (error instanceof Error && ["Not authenticated", "Session refresh failed"].includes(error.message))
+      ) {
+        await endSession();
+        throw new Error("Your session has ended. Sign in again.");
+      }
+      throw error;
     }
   },
 ],

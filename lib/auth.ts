@@ -71,6 +71,14 @@ export const authOptions: NextAuthOptions = {
   ],
 
   callbacks: {
+    async redirect({ url }) {
+      const destination = new URL(url, serverEnv.FRONTEND_ORIGIN)
+      if (destination.origin === serverEnv.FRONTEND_ORIGIN) {
+        return destination.href
+      }
+      return new URL("/login", serverEnv.FRONTEND_ORIGIN).href
+    },
+
     async jwt({ token, user }) {
       if (user) {
         token.backendAuth = {
