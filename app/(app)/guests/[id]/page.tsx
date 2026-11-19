@@ -15,7 +15,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { getGuest, updateGuest, type Guest } from "@/lib/api/guests"
 import { useAsync } from "@/lib/hooks/use-async"
 
-type GuestEdits = Pick<Guest, "firstName" | "lastName" | "email" | "phoneNumber" | "checkInDate" | "checkOutDate" | "roomNumber" | "floorNumber">
+type GuestEdits = Pick<Guest, "firstName" | "lastName" | "phoneNumber" | "checkInDate" | "checkOutDate" | "roomNumber" | "floorNumber"> & {
+  email: string
+  address: string
+}
 
 export default function GuestProfilePage() {
   const { id } = useParams<{ id: string }>()
@@ -26,16 +29,18 @@ export default function GuestProfilePage() {
   )
   const [edits, setEdits] = useState<GuestEdits | null>(null)
   const [saving, setSaving] = useState(false)
-  const form = edits ?? (data ? {
+  const initialForm: GuestEdits | null = data ? {
     firstName: data.firstName,
     lastName: data.lastName,
-    email: data.email,
+    email: data.email ?? "",
+    address: data.address ?? "",
     phoneNumber: data.phoneNumber,
     checkInDate: data.checkInDate,
     checkOutDate: data.checkOutDate,
     roomNumber: data.roomNumber,
     floorNumber: data.floorNumber,
-  } : null)
+  } : null
+  const form = edits ?? initialForm
 
   if (status === "loading" || (loading && !data)) return <Skeleton className="h-96 rounded-2xl" />
   if (!session?.user.hotelId) return <ErrorState message="No hotel is assigned to your account. Contact your administrator to get access to guest records." />
@@ -44,8 +49,8 @@ export default function GuestProfilePage() {
     return <div className="rounded-2xl border bg-white p-10 text-center"><p className="font-medium">Guest not found</p><Link href="/guests" className="mt-2 inline-block text-sm underline">Back to guests</Link></div>
   }
 
-  const dirty = edits !== null && Object.keys(edits).some((field) => edits[field as keyof GuestEdits] !== data[field as keyof GuestEdits])
-  const setField = (field: "firstName" | "lastName" | "email" | "phoneNumber" | "checkInDate" | "checkOutDate", value: string) => setEdits((current) => ({
+  const dirty = edits !== null && Object.keys(edits).some((field) => edits[field as keyof GuestEdits] !== initialForm?.[field as keyof GuestEdits])
+  const setField = (field: "firstName" | "lastName" | "email" | "address" | "phoneNumber" | "checkInDate" | "checkOutDate", value: string) => setEdits((current) => ({
     ...(current ?? form),
     [field]: value,
   }))
@@ -58,7 +63,11 @@ export default function GuestProfilePage() {
     if (!edits) return
     setSaving(true)
     try {
-      await updateGuest(id, edits)
+      await updateGuest(id, {
+        ...edits,
+        email: edits.email.trim() || null,
+        address: edits.address.trim() || null,
+      })
       toast.success("Guest profile saved")
       setEdits(null)
       reload()
@@ -82,7 +91,8 @@ export default function GuestProfilePage() {
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2"><Label htmlFor="guest-first-name">First name</Label><Input id="guest-first-name" maxLength={100} value={form.firstName} onChange={(event) => setField("firstName", event.target.value)} /></div>
           <div className="space-y-2"><Label htmlFor="guest-last-name">Last name</Label><Input id="guest-last-name" maxLength={100} value={form.lastName} onChange={(event) => setField("lastName", event.target.value)} /></div>
-          <div className="space-y-2"><Label htmlFor="guest-profile-email">Email</Label><Input id="guest-profile-email" type="email" value={form.email} onChange={(event) => setField("email", event.target.value)} /></div>
+          <div className="space-y-2"><Label htmlFor="guest-profile-email">Email <span className="text-muted-foreground">(optional)</span></Label><Input id="guest-profile-email" type="email" value={form.email} onChange={(event) => setField("email", event.target.value)} /></div>
+          <div className="space-y-2"><Label htmlFor="guest-profile-address">Address <span className="text-muted-foreground">(optional)</span></Label><Input id="guest-profile-address" autoComplete="street-address" value={form.address} onChange={(event) => setField("address", event.target.value)} /></div>
           <div className="space-y-2"><Label htmlFor="guest-profile-phone">Phone number</Label><Input id="guest-profile-phone" type="tel" maxLength={32} value={form.phoneNumber} onChange={(event) => setField("phoneNumber", event.target.value)} /></div>
         </div>
       </div>

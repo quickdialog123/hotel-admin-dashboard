@@ -11,14 +11,15 @@ import { PageHeader } from "@/components/app/page-header"
 import { Button } from "@/components/ui/button"
 import { ErrorState } from "@/components/app/states"
 import { createGuests } from "@/lib/api/guests"
-import { autoMapGuestColumns, buildGuestPreview, type GuestColumnMapping } from "@/lib/csv/guest-import.mjs"
-import { parseCsv } from "@/lib/csv/parse-csv.mjs"
+import { autoMapGuestColumns, buildGuestPreview, type GuestColumnMapping } from "@/lib/csv/guest-import"
+import { parseCsv } from "@/lib/csv/parse-csv"
 import { cn } from "@/lib/utils"
 
-const REQUIRED_FIELDS = [
+const GUEST_FIELDS = [
   { key: "firstName", label: "First name", icon: UserRound },
   { key: "lastName", label: "Last name", icon: UserRound },
-  { key: "email", label: "Email", icon: AtSign },
+  { key: "email", label: "Email (optional)", icon: AtSign },
+  { key: "address", label: "Address (optional)", icon: Building2 },
   { key: "phoneNumber", label: "Phone", icon: Phone },
   { key: "checkInDate", label: "Check-in date", icon: CalendarDays },
   { key: "checkOutDate", label: "Check-out date", icon: CalendarDays },
@@ -26,7 +27,8 @@ const REQUIRED_FIELDS = [
   { key: "floorNumber", label: "Floor number", icon: Building2 },
 ] as const
 
-type GuestField = (typeof REQUIRED_FIELDS)[number]["key"]
+const REQUIRED_FIELDS = ["firstName", "lastName", "phoneNumber", "checkInDate", "checkOutDate", "roomNumber", "floorNumber"] as const
+type GuestField = (typeof GUEST_FIELDS)[number]["key"]
 
 export default function GuestImportPage() {
   const router = useRouter()
@@ -34,7 +36,7 @@ export default function GuestImportPage() {
   const fileInput = useRef<HTMLInputElement>(null)
   const [fileName, setFileName] = useState("")
   const [rawRows, setRawRows] = useState<string[][]>([])
-  const emptyMapping = (): GuestColumnMapping => ({ firstName: null, lastName: null, email: null, phoneNumber: null, checkInDate: null, checkOutDate: null, roomNumber: null, floorNumber: null })
+  const emptyMapping = (): GuestColumnMapping => ({ firstName: null, lastName: null, email: null, address: null, phoneNumber: null, checkInDate: null, checkOutDate: null, roomNumber: null, floorNumber: null })
   const [mapping, setMapping] = useState<GuestColumnMapping>(emptyMapping)
   const [skipFirstRow, setSkipFirstRow] = useState(true)
   const [fileError, setFileError] = useState<string | null>(null)
@@ -59,7 +61,7 @@ export default function GuestImportPage() {
     () => buildGuestPreview(dataRows, mapping, skipFirstRow ? 2 : 1),
     [dataRows, mapping, skipFirstRow],
   )
-  const completeMapping = REQUIRED_FIELDS.every(({ key }) => mapping[key] !== null)
+  const completeMapping = REQUIRED_FIELDS.every((key) => mapping[key] !== null)
   const tooManyRows = dataRows.length > 500
   const invalidPreviewRows = preview.filter((row) => row.guest === null)
   const invalidRows = invalidPreviewRows.length
@@ -140,7 +142,7 @@ export default function GuestImportPage() {
     }
   }
 
-  const fieldForColumn = (columnIndex: number) => REQUIRED_FIELDS.find(({ key }) => mapping[key] === columnIndex)?.key ?? ""
+  const fieldForColumn = (columnIndex: number): GuestField | "" => GUEST_FIELDS.find(({ key }) => mapping[key] === columnIndex)?.key ?? ""
 
   return (
     <>
@@ -182,7 +184,7 @@ export default function GuestImportPage() {
             <div className="space-y-3 border-b bg-slate-50/70 px-5 py-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Guest fields</p>
               <div className="flex flex-wrap gap-2">
-                {REQUIRED_FIELDS.map(({ key, label, icon: Icon }) => {
+                {GUEST_FIELDS.map(({ key, label, icon: Icon }) => {
                   const columnIndex = mapping[key]
                   return <div key={key} className={cn("inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium shadow-sm", columnIndex === null ? "border-slate-200 bg-white" : "border-emerald-200 bg-emerald-50 text-emerald-900")}>
                     <button type="button" draggable onDragStart={(event) => onFieldDragStart(event, key)} className="inline-flex cursor-grab items-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30" aria-label={`Drag ${label} field`}>
@@ -197,7 +199,7 @@ export default function GuestImportPage() {
 
             <div className="flex flex-wrap gap-x-6 gap-y-3 px-5 py-4">
               <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={skipFirstRow} onChange={(event) => setSkipHeader(event.target.checked)} className="size-4 accent-slate-900" /> Skip the first row (column headers)</label>
-              <span className="text-sm text-muted-foreground">{completeMapping ? "All required fields mapped" : "Map all eight required fields to continue"}</span>
+              <span className="text-sm text-muted-foreground">{completeMapping ? "All required fields mapped" : "Map all seven required fields to continue. Email and address are optional."}</span>
             </div>
 
             {tooManyRows && <div role="alert" className="mx-5 mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><AlertCircle className="mt-0.5 size-4 shrink-0" />This file has {dataRows.length} guest rows. The bulk importer accepts up to 500 rows.</div>}
@@ -221,10 +223,10 @@ export default function GuestImportPage() {
                           <label className="sr-only" htmlFor={`mapping-${columnIndex}`}>Map column {columnIndex + 1}: {header}</label>
                           <select id={`mapping-${columnIndex}`} value={field} onChange={(event) => mapColumn(columnIndex, event.target.value ? event.target.value as GuestField : null)} className="mb-2 h-9 w-full rounded-lg border bg-white px-2 text-sm font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30">
                             <option value="">Don’t import this column</option>
-                            {REQUIRED_FIELDS.map(({ key, label }) => <option key={key} value={key} disabled={mapping[key] !== null && mapping[key] !== columnIndex}>{label}</option>)}
+                            {GUEST_FIELDS.map(({ key, label }) => <option key={key} value={key} disabled={mapping[key] !== null && mapping[key] !== columnIndex}>{label}</option>)}
                           </select>
-                          <div onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move" }} onDrop={(event) => { event.preventDefault(); const fieldKey = event.dataTransfer.getData("text/plain") as GuestField; if (REQUIRED_FIELDS.some((item) => item.key === fieldKey)) mapColumn(columnIndex, fieldKey) }} className={cn("mb-2 flex min-h-9 items-center rounded-lg border border-dashed px-2 text-xs font-normal", field ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-300 text-muted-foreground", fieldError && "border-red-300 bg-red-50 text-red-800")}>
-                            {field ? `${REQUIRED_FIELDS.find((item) => item.key === field)?.label} mapped` : "Drag a field here"}
+                          <div onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move" }} onDrop={(event) => { event.preventDefault(); const fieldKey = event.dataTransfer.getData("text/plain") as GuestField; if (GUEST_FIELDS.some((item) => item.key === fieldKey)) mapColumn(columnIndex, fieldKey) }} className={cn("mb-2 flex min-h-9 items-center rounded-lg border border-dashed px-2 text-xs font-normal", field ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-300 text-muted-foreground", fieldError && "border-red-300 bg-red-50 text-red-800")}>
+                            {field ? `${GUEST_FIELDS.find((item) => item.key === field)?.label} mapped` : "Drag a field here"}
                           </div>
                           <span className="block truncate font-medium text-foreground" title={header}>{header}</span>
                         </th>

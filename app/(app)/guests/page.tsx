@@ -20,7 +20,7 @@ import { deleteGuest, createGuest, listGuests, type Guest, type GuestInput } fro
 import { useAsync } from "@/lib/hooks/use-async"
 import { cn } from "@/lib/utils"
 
-type SortKey = "firstName" | "email" | "phoneNumber" | "roomNumber" | "floorNumber" | "checkInDate" | "checkOutDate"
+type SortKey = "firstName" | "email" | "address" | "phoneNumber" | "roomNumber" | "floorNumber" | "checkInDate" | "checkOutDate"
 
 function pageWindow(page: number, pages: number): (number | "…")[] {
   if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1)
@@ -60,7 +60,7 @@ export default function GuestsPage() {
 
   const rows = useMemo(() => {
     const guests = (data ?? []).filter((guest) =>
-      [guest.firstName, guest.lastName, guest.email, guest.phoneNumber, String(guest.roomNumber), String(guest.floorNumber), guest.checkInDate, guest.checkOutDate]
+      [guest.firstName, guest.lastName, guest.email ?? "", guest.address ?? "", guest.phoneNumber, String(guest.roomNumber), String(guest.floorNumber), guest.checkInDate, guest.checkOutDate]
         .some((value) => value.toLowerCase().includes(debounced)),
     )
     return guests.sort((a, b) => {
@@ -130,7 +130,7 @@ export default function GuestsPage() {
             <table className="w-full min-w-[1050px] text-sm">
               <thead className="border-b text-xs text-muted-foreground"><tr>
                 {heading("firstName", "Guest")}{heading("roomNumber", "Room")}{heading("floorNumber", "Floor")}
-                {heading("email", "Email")}{heading("phoneNumber", "Phone")}{heading("checkInDate", "Check-in")}{heading("checkOutDate", "Check-out")}
+                {heading("email", "Email")}{heading("address", "Address")}{heading("phoneNumber", "Phone")}{heading("checkInDate", "Check-in")}{heading("checkOutDate", "Check-out")}
                 <th scope="col" className="w-12 px-4 py-3"><span className="sr-only">Actions</span></th>
               </tr></thead>
               <tbody>{visibleRows.map((guest) => (
@@ -138,7 +138,8 @@ export default function GuestsPage() {
                   <td className="px-4 py-3 font-medium"><Link href={`/guests/${guest.id}`} className="inline-flex items-center gap-3 hover:underline focus-visible:underline focus-visible:outline-none"><Avatar name={guestName(guest)} />{guestName(guest)}</Link></td>
                   <td className="px-4 py-3 tabular-nums">{guest.roomNumber}</td>
                   <td className="px-4 py-3 tabular-nums">{guest.floorNumber}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{guest.email}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{guest.email || "—"}</td>
+                  <td className="max-w-64 truncate px-4 py-3 text-muted-foreground" title={guest.address ?? undefined}>{guest.address || "—"}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-muted-foreground tabular-nums">{guest.phoneNumber}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{formatGuestDate(guest.checkInDate)}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{formatGuestDate(guest.checkOutDate)}</td>
@@ -186,7 +187,7 @@ export default function GuestsPage() {
 }
 
 function AddGuestDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (open: boolean) => void; onCreated: () => void }) {
-  const initialValues = { firstName: "", lastName: "", email: "", phoneNumber: "", checkInDate: "", checkOutDate: "", roomNumber: "", floorNumber: "" }
+  const initialValues = { firstName: "", lastName: "", email: "", address: "", phoneNumber: "", checkInDate: "", checkOutDate: "", roomNumber: "", floorNumber: "" }
   const [values, setValues] = useState(initialValues)
   const [busy, setBusy] = useState(false)
 
@@ -202,7 +203,8 @@ function AddGuestDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
         ...values,
         firstName: values.firstName.trim(),
         lastName: values.lastName.trim(),
-        email: values.email.trim(),
+        email: values.email.trim() || null,
+        address: values.address.trim() || null,
         phoneNumber: values.phoneNumber.trim(),
         roomNumber: Number(values.roomNumber),
         floorNumber: Number(values.floorNumber),
@@ -225,7 +227,8 @@ function AddGuestDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2"><Label htmlFor="guest-first-name">First name</Label><Input id="guest-first-name" autoComplete="given-name" maxLength={100} value={values.firstName} onChange={(event) => setField("firstName", event.target.value)} required /></div>
         <div className="space-y-2"><Label htmlFor="guest-last-name">Last name</Label><Input id="guest-last-name" autoComplete="family-name" maxLength={100} value={values.lastName} onChange={(event) => setField("lastName", event.target.value)} required /></div>
-        <div className="space-y-2"><Label htmlFor="guest-email">Email</Label><Input id="guest-email" type="email" autoComplete="email" value={values.email} onChange={(event) => setField("email", event.target.value)} required /></div>
+        <div className="space-y-2"><Label htmlFor="guest-email">Email <span className="text-muted-foreground">(optional)</span></Label><Input id="guest-email" type="email" autoComplete="email" value={values.email} onChange={(event) => setField("email", event.target.value)} /></div>
+        <div className="space-y-2"><Label htmlFor="guest-address">Address <span className="text-muted-foreground">(optional)</span></Label><Input id="guest-address" autoComplete="street-address" value={values.address} onChange={(event) => setField("address", event.target.value)} /></div>
         <div className="space-y-2"><Label htmlFor="guest-phone">Phone number</Label><Input id="guest-phone" type="tel" autoComplete="tel" maxLength={32} placeholder="+1 555 010 0001" value={values.phoneNumber} onChange={(event) => setField("phoneNumber", event.target.value)} required /></div>
         <div className="space-y-2"><Label htmlFor="guest-check-in">Check-in date</Label><Input id="guest-check-in" type="date" value={values.checkInDate} onChange={(event) => setField("checkInDate", event.target.value)} required /></div>
         <div className="space-y-2"><Label htmlFor="guest-check-out">Check-out date</Label><Input id="guest-check-out" type="date" min={values.checkInDate ? dayAfterGuestDate(values.checkInDate) : undefined} value={values.checkOutDate} onChange={(event) => setField("checkOutDate", event.target.value)} required /></div>

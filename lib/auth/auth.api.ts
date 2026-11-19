@@ -64,11 +64,12 @@ export function refreshAccessToken(oldToken: string): Promise<string> {
       });
 
       if (!result?.ok || result.error) {
+        await signOut({ redirect: false });
         throw new Error("Session refresh failed");
       }
 
       return accessToken;
-    }))()
+    }))();
   const sharedRefresh = pendingRefresh.finally(() => {
     refreshPromise = null;
   });

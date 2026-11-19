@@ -1,15 +1,13 @@
 /**
  * Parse comma-separated values, including quoted separators, escaped quotes,
  * CRLF line endings, and newlines inside quoted cells.
- * @param {string} input
- * @returns {string[][]}
  */
-export function parseCsv(input) {
+export function parseCsv(input: string): string[][] {
   const text = input.replace(/^\uFEFF/, "")
   if (!text) return []
 
-  const rows = []
-  let row = []
+  const rows: string[][] = []
+  let row: string[] = []
   let field = ""
   let inQuotes = false
   let justEndedRow = false
