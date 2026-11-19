@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { useSession } from "next-auth/react"
 import { toast } from "sonner"
-import { ArrowDown, ArrowUp, ChevronsUpDown, MoreHorizontal, Plus, Search, Trash2, User, Users } from "lucide-react"
+import { ArrowDown, ArrowUp, ChevronsUpDown, MoreHorizontal, Plus, Search, Trash2, Upload, User, Users } from "lucide-react"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { PageHeader } from "@/components/app/page-header"
 import { EmptyState, ErrorState } from "@/components/app/states"
@@ -103,6 +103,7 @@ export default function GuestsPage() {
           <input type="search" aria-label="Search guests" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name, email, phone..." className="h-10 w-full rounded-full border bg-white pr-4 pl-11 text-sm outline-none focus-visible:border-slate-900 focus-visible:ring-3 focus-visible:ring-slate-900/15" />
         </div>
         <Button className="h-10 rounded-full px-5" onClick={() => setAddOpen(true)}><Plus /> Add Guest</Button>
+        <Button variant="outline" className="h-10 rounded-full px-5" onClick={() => router.push("/guests/import")}><Upload /> Import CSV</Button>
         <label className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
           Show
           <select aria-label="Entries per page" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1) }} className="h-9 rounded-lg border bg-white px-2 text-foreground">
