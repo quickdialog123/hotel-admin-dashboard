@@ -42,7 +42,7 @@ export function refreshAccessToken(oldToken: string): Promise<string> {
     return Promise.reject(new Error("Secure refresh unavailable"));
   }
 
-  refreshPromise = navigator.locks
+  const pendingRefresh = navigator.locks
     .request("qd-auth-refresh", async () => {
       const session = await getSession({ broadcast: false });
 
@@ -70,11 +70,13 @@ export function refreshAccessToken(oldToken: string): Promise<string> {
 
       return accessToken;
     })
+    .then((accessToken) => accessToken)
     .finally(() => {
       refreshPromise = null;
     });
 
-  return refreshPromise;
+  refreshPromise = pendingRefresh;
+  return pendingRefresh;
 }
 
 export async function logoutUser() {

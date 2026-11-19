@@ -13,11 +13,14 @@ export const accessTokenResponseSchema = z.object({
 
 export type AccessTokenResponse = z.infer<typeof accessTokenResponseSchema>
 
+export const userRoleSchema = z.enum(["SUPER_ADMIN", "OWNER", "STAFF"])
+export type UserRole = z.infer<typeof userRoleSchema>
+
 export const currentUserSchema = z.object({
   userId: z.uuid(),
   sessionId: z.uuid(),
   hotelId: z.uuid().nullable(),
-  role: z.string().min(1),
+  role: userRoleSchema,
 })
 
 export type CurrentUser = z.infer<typeof currentUserSchema>

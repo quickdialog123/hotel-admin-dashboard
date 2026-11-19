@@ -1,5 +1,5 @@
 import ky from "ky";
-import { getSession } from "next-auth/react";
+import { getSession, signOut } from "next-auth/react";
 import type { z } from "zod";
 
 import { clientEnv } from "@/lib/env/client";
@@ -89,7 +89,7 @@ afterResponse: [
         retry: { limit: 0 },
       });
     } catch {
-      // Leave the original 401 response unchanged.
+      await signOut({ redirect: true, callbackUrl: "/login" });
     }
   },
 ],
