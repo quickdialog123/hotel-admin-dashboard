@@ -9,7 +9,7 @@ import { ArrowDown, ArrowUp, ChevronsUpDown, MoreHorizontal, Plus, Search, Trash
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
 import { PageHeader } from "@/components/app/page-header"
 import { EmptyState, ErrorState } from "@/components/app/states"
-import { Avatar } from "@/components/guests/guest-bits"
+import { Avatar, dayAfterGuestDate, formatGuestDate, guestName } from "@/components/guests/guest-bits"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -20,7 +20,7 @@ import { deleteGuest, createGuest, listGuests, type Guest, type GuestInput } fro
 import { useAsync } from "@/lib/hooks/use-async"
 import { cn } from "@/lib/utils"
 
-type SortKey = "fullName" | "email" | "phoneNumber" | "createdAt"
+type SortKey = "firstName" | "email" | "phoneNumber" | "roomNumber" | "floorNumber" | "checkInDate" | "checkOutDate"
 
 function pageWindow(page: number, pages: number): (number | "…")[] {
   if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1)
@@ -41,8 +41,8 @@ export default function GuestsPage() {
   const [debounced, setDebounced] = useState("")
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [sortBy, setSortBy] = useState<SortKey>("createdAt")
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
+  const [sortBy, setSortBy] = useState<SortKey>("firstName")
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
   const [deleting, setDeleting] = useState<Guest | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const { data, error, loading, reload } = useAsync(
@@ -60,10 +60,15 @@ export default function GuestsPage() {
 
   const rows = useMemo(() => {
     const guests = (data ?? []).filter((guest) =>
-      [guest.fullName, guest.email, guest.phoneNumber].some((value) => value.toLowerCase().includes(debounced)),
+      [guest.firstName, guest.lastName, guest.email, guest.phoneNumber, String(guest.roomNumber), String(guest.floorNumber), guest.checkInDate, guest.checkOutDate]
+        .some((value) => value.toLowerCase().includes(debounced)),
     )
     return guests.sort((a, b) => {
-      const comparison = a[sortBy].localeCompare(b[sortBy], undefined, { numeric: true })
+      const left = a[sortBy]
+      const right = b[sortBy]
+      const comparison = typeof left === "number" && typeof right === "number"
+        ? left - right
+        : String(left).localeCompare(String(right), undefined, { numeric: true })
       return sortDir === "asc" ? comparison : -comparison
     })
   }, [data, debounced, sortBy, sortDir])
@@ -75,7 +80,7 @@ export default function GuestsPage() {
     if (sortBy === key) setSortDir((direction) => direction === "asc" ? "desc" : "asc")
     else {
       setSortBy(key)
-      setSortDir(key === "createdAt" ? "desc" : "asc")
+      setSortDir("asc")
     }
     setPage(1)
   }
@@ -96,11 +101,11 @@ export default function GuestsPage() {
 
   return (
     <>
-      <PageHeader title="Guests" description="Guests associated with your hotel." />
+      <PageHeader title="Guests" description="Guest contact details and stay information." />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative w-full max-w-sm min-w-56 flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <input type="search" aria-label="Search guests" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name, email, phone..." className="h-10 w-full rounded-full border bg-white pr-4 pl-11 text-sm outline-none focus-visible:border-slate-900 focus-visible:ring-3 focus-visible:ring-slate-900/15" />
+          <input type="search" aria-label="Search guests" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search guest, room, date, email..." className="h-10 w-full rounded-full border bg-white pr-4 pl-11 text-sm outline-none focus-visible:border-slate-900 focus-visible:ring-3 focus-visible:ring-slate-900/15" />
         </div>
         <Button className="h-10 rounded-full px-5" onClick={() => setAddOpen(true)}><Plus /> Add Guest</Button>
         <Button variant="outline" className="h-10 rounded-full px-5" onClick={() => router.push("/guests/import")}><Upload /> Import CSV</Button>
@@ -122,21 +127,23 @@ export default function GuestsPage() {
       ) : (
         <>
           <div className={cn("overflow-x-auto rounded-2xl border bg-white transition-opacity", loading && "opacity-60")}>
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[1050px] text-sm">
               <thead className="border-b text-xs text-muted-foreground"><tr>
-                <th scope="col" className="px-4 py-3 text-left font-medium">Guest</th>
-                {heading("fullName", "Name")}{heading("email", "Email")}{heading("phoneNumber", "Phone")}{heading("createdAt", "Added")}
+                {heading("firstName", "Guest")}{heading("roomNumber", "Room")}{heading("floorNumber", "Floor")}
+                {heading("email", "Email")}{heading("phoneNumber", "Phone")}{heading("checkInDate", "Check-in")}{heading("checkOutDate", "Check-out")}
                 <th scope="col" className="w-12 px-4 py-3"><span className="sr-only">Actions</span></th>
               </tr></thead>
               <tbody>{visibleRows.map((guest) => (
                 <tr key={guest.id} className="border-b last:border-b-0 hover:bg-slate-50">
-                  <td className="px-4 py-3"><Avatar name={guest.fullName} /></td>
-                  <td className="px-4 py-3 font-medium"><Link href={`/guests/${guest.id}`} className="hover:underline focus-visible:underline focus-visible:outline-none">{guest.fullName}</Link></td>
+                  <td className="px-4 py-3 font-medium"><Link href={`/guests/${guest.id}`} className="inline-flex items-center gap-3 hover:underline focus-visible:underline focus-visible:outline-none"><Avatar name={guestName(guest)} />{guestName(guest)}</Link></td>
+                  <td className="px-4 py-3 tabular-nums">{guest.roomNumber}</td>
+                  <td className="px-4 py-3 tabular-nums">{guest.floorNumber}</td>
                   <td className="px-4 py-3 text-muted-foreground">{guest.email}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-muted-foreground tabular-nums">{guest.phoneNumber}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{new Date(guest.createdAt).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{formatGuestDate(guest.checkInDate)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{formatGuestDate(guest.checkOutDate)}</td>
                   <td className="px-4 py-3"><DropdownMenu>
-                    <DropdownMenuTrigger aria-label={`Actions for ${guest.fullName}`} className="flex size-8 items-center justify-center rounded-full outline-none hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-slate-900/30 aria-expanded:bg-slate-100"><MoreHorizontal className="size-4" /></DropdownMenuTrigger>
+                    <DropdownMenuTrigger aria-label={`Actions for ${guestName(guest)}`} className="flex size-8 items-center justify-center rounded-full outline-none hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-slate-900/30 aria-expanded:bg-slate-100"><MoreHorizontal className="size-4" /></DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48 rounded-2xl p-1.5">
                       <DropdownMenuItem className="rounded-xl" onClick={() => router.push(`/guests/${guest.id}`)}><User /> View guest</DropdownMenuItem>
                       <DropdownMenuItem variant="destructive" className="rounded-xl" onClick={() => setDeleting(guest)}><Trash2 /> Delete guest</DropdownMenuItem>
@@ -163,7 +170,7 @@ export default function GuestsPage() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(open) => !open && setDeleting(null)}
-        title={`Delete ${deleting?.fullName}?`}
+        title={`Delete ${deleting ? guestName(deleting) : "guest"}?`}
         description="This permanently deletes this guest record from your hotel’s guest list."
         confirmLabel="Delete guest"
         onConfirm={async () => {
@@ -179,24 +186,30 @@ export default function GuestsPage() {
 }
 
 function AddGuestDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (open: boolean) => void; onCreated: () => void }) {
-  const [fullName, setFullName] = useState("")
-  const [email, setEmail] = useState("")
-  const [phoneNumber, setPhoneNumber] = useState("")
-  const [touched, setTouched] = useState(false)
+  const initialValues = { firstName: "", lastName: "", email: "", phoneNumber: "", checkInDate: "", checkOutDate: "", roomNumber: "", floorNumber: "" }
+  const [values, setValues] = useState(initialValues)
   const [busy, setBusy] = useState(false)
-  const emailValid = /^\S+@\S+\.\S+$/.test(email.trim())
-  const phoneValid = phoneNumber.trim().length > 0 && phoneNumber.trim().length <= 32
+
+  function setField(field: keyof typeof initialValues, value: string) {
+    setValues((current) => ({ ...current, [field]: value }))
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setTouched(true)
-    if (!fullName.trim() || !emailValid || !phoneValid) return
     setBusy(true)
     try {
-      const input: GuestInput = { fullName: fullName.trim(), email: email.trim(), phoneNumber: phoneNumber.trim() }
+      const input: GuestInput = {
+        ...values,
+        firstName: values.firstName.trim(),
+        lastName: values.lastName.trim(),
+        email: values.email.trim(),
+        phoneNumber: values.phoneNumber.trim(),
+        roomNumber: Number(values.roomNumber),
+        floorNumber: Number(values.floorNumber),
+      }
       await createGuest(input)
       toast.success("Guest added")
-      setFullName(""); setEmail(""); setPhoneNumber(""); setTouched(false)
+      setValues(initialValues)
       onOpenChange(false)
       onCreated()
     } catch (error) {
@@ -206,12 +219,19 @@ function AddGuestDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
     }
   }
 
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent>
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
     <form onSubmit={submit} className="space-y-4">
-      <DialogHeader><DialogTitle>Add guest</DialogTitle><DialogDescription>Add a guest to your hotel’s records.</DialogDescription></DialogHeader>
-      <div className="space-y-2"><Label htmlFor="guest-name">Full name</Label><Input id="guest-name" autoComplete="name" maxLength={200} value={fullName} onChange={(event) => setFullName(event.target.value)} aria-invalid={touched && !fullName.trim()} required /></div>
-      <div className="space-y-2"><Label htmlFor="guest-email">Email</Label><Input id="guest-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} aria-invalid={touched && !emailValid} required /></div>
-      <div className="space-y-2"><Label htmlFor="guest-phone">Phone number</Label><Input id="guest-phone" type="tel" autoComplete="tel" maxLength={32} placeholder="+44 7700 900000" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} aria-invalid={touched && !phoneValid} required />{touched && !phoneValid && <p className="text-sm text-destructive">Enter a phone number up to 32 characters.</p>}</div>
+      <DialogHeader><DialogTitle>Add guest</DialogTitle><DialogDescription>Add contact and stay details to your hotel’s records.</DialogDescription></DialogHeader>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-2"><Label htmlFor="guest-first-name">First name</Label><Input id="guest-first-name" autoComplete="given-name" maxLength={100} value={values.firstName} onChange={(event) => setField("firstName", event.target.value)} required /></div>
+        <div className="space-y-2"><Label htmlFor="guest-last-name">Last name</Label><Input id="guest-last-name" autoComplete="family-name" maxLength={100} value={values.lastName} onChange={(event) => setField("lastName", event.target.value)} required /></div>
+        <div className="space-y-2"><Label htmlFor="guest-email">Email</Label><Input id="guest-email" type="email" autoComplete="email" value={values.email} onChange={(event) => setField("email", event.target.value)} required /></div>
+        <div className="space-y-2"><Label htmlFor="guest-phone">Phone number</Label><Input id="guest-phone" type="tel" autoComplete="tel" maxLength={32} placeholder="+1 555 010 0001" value={values.phoneNumber} onChange={(event) => setField("phoneNumber", event.target.value)} required /></div>
+        <div className="space-y-2"><Label htmlFor="guest-check-in">Check-in date</Label><Input id="guest-check-in" type="date" value={values.checkInDate} onChange={(event) => setField("checkInDate", event.target.value)} required /></div>
+        <div className="space-y-2"><Label htmlFor="guest-check-out">Check-out date</Label><Input id="guest-check-out" type="date" min={values.checkInDate ? dayAfterGuestDate(values.checkInDate) : undefined} value={values.checkOutDate} onChange={(event) => setField("checkOutDate", event.target.value)} required /></div>
+        <div className="space-y-2"><Label htmlFor="guest-room">Room number</Label><Input id="guest-room" type="number" min="1" step="1" value={values.roomNumber} onChange={(event) => setField("roomNumber", event.target.value)} required /></div>
+        <div className="space-y-2"><Label htmlFor="guest-floor">Floor number</Label><Input id="guest-floor" type="number" step="1" value={values.floorNumber} onChange={(event) => setField("floorNumber", event.target.value)} required /></div>
+      </div>
       <DialogFooter><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? "Adding…" : "Add guest"}</Button></DialogFooter>
     </form>
   </DialogContent></Dialog>

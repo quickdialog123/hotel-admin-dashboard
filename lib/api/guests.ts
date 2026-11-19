@@ -5,19 +5,35 @@ import { apiClient } from "@/lib/api/client"
 export const guestSchema = z.object({
   id: z.uuid(),
   hotelId: z.uuid(),
-  fullName: z.string(),
+  firstName: z.string(),
+  lastName: z.string(),
   email: z.email(),
   phoneNumber: z.string(),
+  checkInDate: z.iso.date(),
+  checkOutDate: z.iso.date(),
+  roomNumber: z.number().int().positive(),
+  floorNumber: z.number().int(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
+}).refine((guest) => guest.checkOutDate > guest.checkInDate, {
+  path: ["checkOutDate"],
+  message: "Check-out must be after check-in.",
 })
 
 export type Guest = z.infer<typeof guestSchema>
 
 export const guestInputSchema = z.object({
-  fullName: z.string().trim().min(1).max(200),
+  firstName: z.string().trim().min(1).max(100),
+  lastName: z.string().trim().min(1).max(100),
   email: z.email().trim(),
   phoneNumber: z.string().trim().min(1).max(32),
+  checkInDate: z.iso.date(),
+  checkOutDate: z.iso.date(),
+  roomNumber: z.number().int().positive(),
+  floorNumber: z.number().int(),
+}).refine((guest) => !guest.checkInDate || !guest.checkOutDate || guest.checkOutDate > guest.checkInDate, {
+  path: ["checkOutDate"],
+  message: "Check-out must be after check-in.",
 })
 
 export type GuestInput = z.infer<typeof guestInputSchema>

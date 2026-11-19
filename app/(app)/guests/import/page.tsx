@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useMemo, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { toast } from "sonner"
-import { AlertCircle, ArrowLeft, Check, FileSpreadsheet, GripVertical, LoaderCircle, Upload, UserRound, AtSign, Phone } from "lucide-react"
+import { AlertCircle, ArrowLeft, Check, FileSpreadsheet, GripVertical, LoaderCircle, Upload, UserRound, AtSign, Phone, CalendarDays, BedDouble, Building2 } from "lucide-react"
 
 import { PageHeader } from "@/components/app/page-header"
 import { Button } from "@/components/ui/button"
@@ -16,9 +16,14 @@ import { parseCsv } from "@/lib/csv/parse-csv.mjs"
 import { cn } from "@/lib/utils"
 
 const REQUIRED_FIELDS = [
-  { key: "fullName", label: "Full name", icon: UserRound },
+  { key: "firstName", label: "First name", icon: UserRound },
+  { key: "lastName", label: "Last name", icon: UserRound },
   { key: "email", label: "Email", icon: AtSign },
   { key: "phoneNumber", label: "Phone", icon: Phone },
+  { key: "checkInDate", label: "Check-in date", icon: CalendarDays },
+  { key: "checkOutDate", label: "Check-out date", icon: CalendarDays },
+  { key: "roomNumber", label: "Room number", icon: BedDouble },
+  { key: "floorNumber", label: "Floor number", icon: Building2 },
 ] as const
 
 type GuestField = (typeof REQUIRED_FIELDS)[number]["key"]
@@ -29,7 +34,8 @@ export default function GuestImportPage() {
   const fileInput = useRef<HTMLInputElement>(null)
   const [fileName, setFileName] = useState("")
   const [rawRows, setRawRows] = useState<string[][]>([])
-  const [mapping, setMapping] = useState<GuestColumnMapping>({ fullName: null, email: null, phoneNumber: null })
+  const emptyMapping = (): GuestColumnMapping => ({ firstName: null, lastName: null, email: null, phoneNumber: null, checkInDate: null, checkOutDate: null, roomNumber: null, floorNumber: null })
+  const [mapping, setMapping] = useState<GuestColumnMapping>(emptyMapping)
   const [skipFirstRow, setSkipFirstRow] = useState(true)
   const [fileError, setFileError] = useState<string | null>(null)
   const [isDraggingFile, setIsDraggingFile] = useState(false)
@@ -67,7 +73,7 @@ export default function GuestImportPage() {
   function resetFile() {
     setFileName("")
     setRawRows([])
-    setMapping({ fullName: null, email: null, phoneNumber: null })
+    setMapping(emptyMapping())
     setFileError(null)
     if (fileInput.current) fileInput.current.value = ""
   }
@@ -94,10 +100,10 @@ export default function GuestImportPage() {
       }
       setRawRows(parsed)
       const headerValues = parsed[0].map((value, index) => value.trim() || `Column ${index + 1}`)
-      setMapping(skipFirstRow ? autoMapGuestColumns(headerValues) : { fullName: null, email: null, phoneNumber: null })
+      setMapping(skipFirstRow ? autoMapGuestColumns(headerValues) : emptyMapping())
     } catch (cause) {
       setRawRows([])
-      setMapping({ fullName: null, email: null, phoneNumber: null })
+      setMapping(emptyMapping())
       setFileError(cause instanceof Error ? cause.message : "Unable to read this CSV file.")
       if (fileInput.current) fileInput.current.value = ""
     }
@@ -191,7 +197,7 @@ export default function GuestImportPage() {
 
             <div className="flex flex-wrap gap-x-6 gap-y-3 px-5 py-4">
               <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={skipFirstRow} onChange={(event) => setSkipHeader(event.target.checked)} className="size-4 accent-slate-900" /> Skip the first row (column headers)</label>
-              <span className="text-sm text-muted-foreground">{completeMapping ? "All required fields mapped" : "Map all three required fields to continue"}</span>
+              <span className="text-sm text-muted-foreground">{completeMapping ? "All required fields mapped" : "Map all eight required fields to continue"}</span>
             </div>
 
             {tooManyRows && <div role="alert" className="mx-5 mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><AlertCircle className="mt-0.5 size-4 shrink-0" />This file has {dataRows.length} guest rows. The bulk importer accepts up to 500 rows.</div>}
