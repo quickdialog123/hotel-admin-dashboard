@@ -2,6 +2,10 @@ import { z } from "zod"
 
 import { apiClient } from "@/lib/api/client"
 
+const guestDateSchema = z
+  .union([z.iso.date(), z.iso.datetime()])
+  .transform((date) => date.slice(0, 10))
+
 export const guestSchema = z.object({
   id: z.uuid(),
   hotelId: z.uuid(),
@@ -10,8 +14,8 @@ export const guestSchema = z.object({
   email: z.email().nullable().optional(),
   address: z.string().nullable().optional(),
   phoneNumber: z.string(),
-  checkInDate: z.iso.date(),
-  checkOutDate: z.iso.date(),
+  checkInDate: guestDateSchema,
+  checkOutDate: guestDateSchema,
   roomNumber: z.number().int().positive(),
   floorNumber: z.number().int(),
   createdAt: z.iso.datetime(),
@@ -29,8 +33,8 @@ export const guestInputSchema = z.object({
   email: z.union([z.email().trim(), z.literal(""), z.null()]).transform((value) => value || null),
   address: z.union([z.string().trim(), z.null()]).transform((value) => value || null),
   phoneNumber: z.string().trim().min(1).max(32),
-  checkInDate: z.iso.date(),
-  checkOutDate: z.iso.date(),
+  checkInDate: guestDateSchema,
+  checkOutDate: guestDateSchema,
   roomNumber: z.number().int().positive(),
   floorNumber: z.number().int(),
 }).refine((guest) => !guest.checkInDate || !guest.checkOutDate || guest.checkOutDate > guest.checkInDate, {
