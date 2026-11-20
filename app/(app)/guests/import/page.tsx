@@ -4,13 +4,14 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useMemo, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { AlertCircle, ArrowLeft, Check, FileSpreadsheet, GripVertical, LoaderCircle, Upload, UserRound, AtSign, Phone, CalendarDays, BedDouble, Building2 } from "lucide-react"
 
 import { PageHeader } from "@/components/app/page-header"
 import { Button } from "@/components/ui/button"
 import { ErrorState } from "@/components/app/states"
-import { createGuests } from "@/lib/api/guests"
+import { createGuests, guestKeys } from "@/lib/api/guests"
 import { autoMapGuestColumns, buildGuestPreview, type GuestColumnMapping } from "@/lib/csv/guest-import"
 import { parseCsv } from "@/lib/csv/parse-csv"
 import { cn } from "@/lib/utils"
@@ -33,6 +34,11 @@ type GuestField = (typeof GUEST_FIELDS)[number]["key"]
 export default function GuestImportPage() {
   const router = useRouter()
   const { data: session, status } = useSession()
+  const queryClient = useQueryClient()
+  const importMutation = useMutation({
+    mutationFn: createGuests,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: guestKeys.all }),
+  })
   const fileInput = useRef<HTMLInputElement>(null)
   const [fileName, setFileName] = useState("")
   const [rawRows, setRawRows] = useState<string[][]>([])
@@ -41,7 +47,6 @@ export default function GuestImportPage() {
   const [skipFirstRow, setSkipFirstRow] = useState(true)
   const [fileError, setFileError] = useState<string | null>(null)
   const [isDraggingFile, setIsDraggingFile] = useState(false)
-  const [isImporting, setIsImporting] = useState(false)
 
   const headers = useMemo(() => {
     const source = rawRows[0] ?? []
@@ -65,7 +70,7 @@ export default function GuestImportPage() {
   const tooManyRows = dataRows.length > 500
   const invalidPreviewRows = preview.filter((row) => row.guest === null)
   const invalidRows = invalidPreviewRows.length
-  const canImport = Boolean(fileName) && !fileError && completeMapping && dataRows.length > 0 && !tooManyRows && invalidRows === 0 && !isImporting
+  const canImport = Boolean(fileName) && !fileError && completeMapping && dataRows.length > 0 && !tooManyRows && invalidRows === 0 && !importMutation.isPending
 
   if (status === "loading") return <div className="h-80 animate-pulse rounded-2xl border bg-white" />
   if (!session?.user.hotelId) {
@@ -129,16 +134,13 @@ export default function GuestImportPage() {
 
   async function importGuests() {
     if (!canImport) return
-    setIsImporting(true)
     try {
       const guests = preview.flatMap((row) => row.guest ? [row.guest] : [])
-      const result = await createGuests(guests)
+      const result = await importMutation.mutateAsync(guests)
       toast.success(`Imported ${result.count} guest${result.count === 1 ? "" : "s"}`)
       router.replace("/guests")
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Unable to import guests.")
-    } finally {
-      setIsImporting(false)
     }
   }
 
@@ -256,7 +258,7 @@ export default function GuestImportPage() {
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-slate-50/60 px-5 py-4">
               <p className="text-sm text-muted-foreground">{invalidRows === 0 && completeMapping && dataRows.length > 0 && !tooManyRows ? `${dataRows.length} guests ready to import` : "Review mappings and fix validation issues to continue."}</p>
-              <div className="flex items-center gap-2"><Button variant="outline" className="rounded-xl" onClick={() => router.push("/guests")}>Cancel</Button><Button className="rounded-xl" disabled={!canImport} onClick={() => void importGuests()}>{isImporting && <LoaderCircle className="animate-spin" />}Import {dataRows.length} guest{dataRows.length === 1 ? "" : "s"}</Button></div>
+              <div className="flex items-center gap-2"><Button variant="outline" className="rounded-xl" onClick={() => router.push("/guests")}>Cancel</Button><Button className="rounded-xl" disabled={!canImport} onClick={() => void importGuests()}>{importMutation.isPending && <LoaderCircle className="animate-spin" />}Import {dataRows.length} guest{dataRows.length === 1 ? "" : "s"}</Button></div>
             </div>
           </section>
         </div>

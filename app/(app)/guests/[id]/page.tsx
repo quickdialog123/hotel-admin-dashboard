@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useState } from "react"
 import { useSession } from "next-auth/react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ArrowLeft, Save } from "lucide-react"
 import { toast } from "sonner"
 import { ErrorState } from "@/components/app/states"
@@ -12,8 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
-import { getGuest, updateGuest, type Guest } from "@/lib/api/guests"
-import { useAsync } from "@/lib/hooks/use-async"
+import { getGuest, guestKeys, updateGuest, type Guest } from "@/lib/api/guests"
 
 type GuestEdits = Pick<Guest, "firstName" | "lastName" | "phoneNumber" | "checkInDate" | "checkOutDate" | "roomNumber" | "floorNumber"> & {
   email: string
@@ -23,12 +23,23 @@ type GuestEdits = Pick<Guest, "firstName" | "lastName" | "phoneNumber" | "checkI
 export default function GuestProfilePage() {
   const { id } = useParams<{ id: string }>()
   const { data: session, status } = useSession()
-  const { data, error, loading, reload } = useAsync(
-    () => session?.user.hotelId ? getGuest(id) : Promise.resolve(null),
-    [id, session?.user.hotelId],
-  )
+  const hotelId = session?.user.hotelId
+  const queryClient = useQueryClient()
+  const guestQuery = useQuery({
+    queryKey: guestKeys.detail(hotelId ?? "", id),
+    queryFn: () => getGuest(id),
+    enabled: Boolean(hotelId && id),
+  })
+  const updateMutation = useMutation({
+    mutationFn: (input: Parameters<typeof updateGuest>[1]) => updateGuest(id, input),
+    onSuccess: async (guest) => {
+      queryClient.setQueryData(guestKeys.detail(hotelId ?? "", id), guest)
+      await queryClient.invalidateQueries({ queryKey: guestKeys.all })
+    },
+  })
+  const data = guestQuery.data
   const [edits, setEdits] = useState<GuestEdits | null>(null)
-  const [saving, setSaving] = useState(false)
+  const saving = updateMutation.isPending
   const initialForm: GuestEdits | null = data ? {
     firstName: data.firstName,
     lastName: data.lastName,
@@ -42,9 +53,9 @@ export default function GuestProfilePage() {
   } : null
   const form = edits ?? initialForm
 
-  if (status === "loading" || (loading && !data)) return <Skeleton className="h-96 rounded-2xl" />
+  if (status === "loading" || (guestQuery.isLoading && !data)) return <Skeleton className="h-96 rounded-2xl" />
   if (!session?.user.hotelId) return <ErrorState message="No hotel is assigned to your account. Contact your administrator to get access to guest records." />
-  if (error) return <ErrorState message={error} onRetry={reload} />
+  if (guestQuery.error) return <ErrorState message={guestQuery.error.message} onRetry={() => void guestQuery.refetch()} />
   if (!data || !form) {
     return <div className="rounded-2xl border bg-white p-10 text-center"><p className="font-medium">Guest not found</p><Link href="/guests" className="mt-2 inline-block text-sm underline">Back to guests</Link></div>
   }
@@ -61,20 +72,16 @@ export default function GuestProfilePage() {
 
   async function save() {
     if (!edits) return
-    setSaving(true)
     try {
-      await updateGuest(id, {
+      await updateMutation.mutateAsync({
         ...edits,
         email: edits.email.trim() || null,
         address: edits.address.trim() || null,
       })
       toast.success("Guest profile saved")
       setEdits(null)
-      reload()
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Couldn't save guest")
-    } finally {
-      setSaving(false)
     }
   }
 

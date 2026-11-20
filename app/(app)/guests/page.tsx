@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { useSession } from "next-auth/react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { ArrowDown, ArrowUp, ChevronsUpDown, MoreHorizontal, Plus, Search, Trash2, Upload, User, Users } from "lucide-react"
 import { ConfirmDialog } from "@/components/app/confirm-dialog"
@@ -16,8 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
-import { deleteGuest, createGuest, listGuests, type Guest, type GuestInput } from "@/lib/api/guests"
-import { useAsync } from "@/lib/hooks/use-async"
+import { createGuest, deleteGuest, guestKeys, listGuests, type Guest, type GuestInput } from "@/lib/api/guests"
 import { cn } from "@/lib/utils"
 
 type SortKey = "firstName" | "email" | "address" | "phoneNumber" | "roomNumber" | "floorNumber" | "checkInDate" | "checkOutDate"
@@ -37,6 +37,8 @@ function pageWindow(page: number, pages: number): (number | "…")[] {
 export default function GuestsPage() {
   const router = useRouter()
   const { data: session, status } = useSession()
+  const queryClient = useQueryClient()
+  const hotelId = session?.user.hotelId
   const [search, setSearch] = useState("")
   const [debounced, setDebounced] = useState("")
   const [page, setPage] = useState(1)
@@ -45,10 +47,16 @@ export default function GuestsPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
   const [deleting, setDeleting] = useState<Guest | null>(null)
   const [addOpen, setAddOpen] = useState(false)
-  const { data, error, loading, reload } = useAsync(
-    () => session?.user.hotelId ? listGuests() : Promise.resolve([]),
-    [session?.user.hotelId],
-  )
+  const guestsQuery = useQuery({
+    queryKey: guestKeys.list(hotelId ?? ""),
+    queryFn: listGuests,
+    enabled: Boolean(hotelId),
+  })
+  const deleteMutation = useMutation({
+    mutationFn: deleteGuest,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: guestKeys.all }),
+  })
+  const data = guestsQuery.data
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -118,7 +126,7 @@ export default function GuestsPage() {
         </label>
       </div>
 
-      {error ? <ErrorState message={error} onRetry={reload} /> : loading && !data ? (
+      {guestsQuery.error ? <ErrorState message={guestsQuery.error.message} onRetry={() => void guestsQuery.refetch()} /> : guestsQuery.isLoading && !data ? (
         <div className="space-y-2 rounded-2xl border bg-white p-4" aria-busy="true" aria-label="Loading">
           {Array.from({ length: 8 }, (_, index) => <Skeleton key={index} className="h-11 w-full" />)}
         </div>
@@ -126,7 +134,7 @@ export default function GuestsPage() {
         <EmptyState icon={<Users className="size-5" />} title={data?.length ? "No guests match your search" : "No guests yet"} description={data?.length ? `Nothing found for “${search}”.` : "Guest records for your hotel will appear here."} action={data?.length ? <Button variant="outline" onClick={() => setSearch("")}>Clear search</Button> : undefined} />
       ) : (
         <>
-          <div className={cn("overflow-x-auto rounded-2xl border bg-white transition-opacity", loading && "opacity-60")}>
+          <div className={cn("overflow-x-auto rounded-2xl border bg-white transition-opacity", guestsQuery.isFetching && "opacity-60")}>
             <table className="w-full min-w-[1050px] text-sm">
               <thead className="border-b text-xs text-muted-foreground"><tr>
                 {heading("firstName", "Guest")}{heading("roomNumber", "Room")}{heading("floorNumber", "Floor")}
@@ -167,7 +175,7 @@ export default function GuestsPage() {
         </>
       )}
 
-      <AddGuestDialog open={addOpen} onOpenChange={setAddOpen} onCreated={reload} />
+      <AddGuestDialog open={addOpen} onOpenChange={setAddOpen} />
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(open) => !open && setDeleting(null)}
@@ -176,20 +184,24 @@ export default function GuestsPage() {
         confirmLabel="Delete guest"
         onConfirm={async () => {
           if (!deleting) return
-          await deleteGuest(deleting.id)
+          await deleteMutation.mutateAsync(deleting.id)
           toast.success("Guest deleted")
           setDeleting(null)
-          reload()
         }}
       />
     </>
   )
 }
 
-function AddGuestDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (open: boolean) => void; onCreated: () => void }) {
+function AddGuestDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const queryClient = useQueryClient()
+  const createMutation = useMutation({
+    mutationFn: createGuest,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: guestKeys.all }),
+  })
   const initialValues = { firstName: "", lastName: "", email: "", address: "", phoneNumber: "", checkInDate: "", checkOutDate: "", roomNumber: "", floorNumber: "" }
   const [values, setValues] = useState(initialValues)
-  const [busy, setBusy] = useState(false)
+  const busy = createMutation.isPending
 
   function setField(field: keyof typeof initialValues, value: string) {
     setValues((current) => ({ ...current, [field]: value }))
@@ -197,7 +209,6 @@ function AddGuestDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setBusy(true)
     try {
       const input: GuestInput = {
         ...values,
@@ -209,15 +220,12 @@ function AddGuestDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
         roomNumber: Number(values.roomNumber),
         floorNumber: Number(values.floorNumber),
       }
-      await createGuest(input)
+      await createMutation.mutateAsync(input)
       toast.success("Guest added")
       setValues(initialValues)
       onOpenChange(false)
-      onCreated()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't add guest")
-    } finally {
-      setBusy(false)
     }
   }
 

@@ -44,6 +44,12 @@ export const guestInputSchema = z.object({
 
 export type GuestInput = z.infer<typeof guestInputSchema>
 
+export const guestKeys = {
+  all: ["guests"] as const,
+  list: (hotelId: string) => [...guestKeys.all, hotelId] as const,
+  detail: (hotelId: string, guestId: string) => [...guestKeys.list(hotelId), guestId] as const,
+}
+
 export const guestListSchema = z.array(guestSchema)
 
 export async function listGuests(): Promise<Guest[]> {
