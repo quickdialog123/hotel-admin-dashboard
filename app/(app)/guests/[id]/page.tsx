@@ -1,171 +1,118 @@
 "use client"
 
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import { useState } from "react"
+import { useSession } from "next-auth/react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { ArrowLeft, Save } from "lucide-react"
 import { toast } from "sonner"
-import { ArrowLeft, MessageSquare, Plus, X } from "lucide-react"
-import { PillSelect } from "@/components/app/pill-select"
 import { ErrorState } from "@/components/app/states"
-import { Avatar, GuestStatusPill, STATUS_OPTIONS } from "@/components/guests/guest-bits"
+import { Avatar, dayAfterGuestDate, formatGuestDate } from "@/components/guests/guest-bits"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Switch } from "@/components/ui/switch"
-import { Textarea } from "@/components/ui/textarea"
-import { findConversationByGuest } from "@/lib/api/conversations"
-import { getGuest, updateGuest, type Guest } from "@/lib/api/guests"
-import { useAsync } from "@/lib/hooks/use-async"
-import { timeAgo } from "@/lib/format"
+import { getGuest, guestKeys, updateGuest, type Guest } from "@/lib/api/guests"
 
-const TIERS = [
-  { value: "none", label: "None" },
-  { value: "Silver", label: "Silver" },
-  { value: "Gold", label: "Gold" },
-  { value: "Platinum", label: "Platinum" },
-]
+type GuestEdits = Pick<Guest, "firstName" | "lastName" | "phoneNumber" | "checkInDate" | "checkOutDate" | "roomNumber" | "floorNumber"> & {
+  email: string
+  address: string
+}
 
 export default function GuestProfilePage() {
   const { id } = useParams<{ id: string }>()
-  const router = useRouter()
-  const { data, error, loading, reload } = useAsync(() => getGuest(id), [id])
-  const [edits, setEdits] = useState<Guest | null>(null)
-  const form = edits ?? data
-  const setForm = setEdits
-  const [newPref, setNewPref] = useState("")
-  const [saving, setSaving] = useState(false)
+  const { data: session, status } = useSession()
+  const hotelId = session?.user.hotelId
+  const queryClient = useQueryClient()
+  const guestQuery = useQuery({
+    queryKey: guestKeys.detail(hotelId ?? "", id),
+    queryFn: () => getGuest(id),
+    enabled: Boolean(hotelId && id),
+  })
+  const updateMutation = useMutation({
+    mutationFn: (input: Parameters<typeof updateGuest>[1]) => updateGuest(id, input),
+    onSuccess: async (guest) => {
+      queryClient.setQueryData(guestKeys.detail(hotelId ?? "", id), guest)
+      await queryClient.invalidateQueries({ queryKey: guestKeys.all })
+    },
+  })
+  const data = guestQuery.data
+  const [edits, setEdits] = useState<GuestEdits | null>(null)
+  const saving = updateMutation.isPending
+  const initialForm: GuestEdits | null = data ? {
+    firstName: data.firstName,
+    lastName: data.lastName,
+    email: data.email ?? "",
+    address: data.address ?? "",
+    phoneNumber: data.phoneNumber,
+    checkInDate: data.checkInDate,
+    checkOutDate: data.checkOutDate,
+    roomNumber: data.roomNumber,
+    floorNumber: data.floorNumber,
+  } : null
+  const form = edits ?? initialForm
 
-  if (error) return <ErrorState message={error} onRetry={reload} />
-  if (loading && !data) return <Skeleton className="h-96 rounded-2xl" />
+  if (status === "loading" || (guestQuery.isLoading && !data)) return <Skeleton className="h-96 rounded-2xl" />
+  if (!session?.user.hotelId) return <ErrorState message="No hotel is assigned to your account. Contact your administrator to get access to guest records." />
+  if (guestQuery.error) return <ErrorState message={guestQuery.error.message} onRetry={() => void guestQuery.refetch()} />
   if (!data || !form) {
-    return (
-      <div className="rounded-2xl border bg-white p-10 text-center">
-        <p className="font-medium">Guest not found</p>
-        <Link href="/guests" className="mt-2 inline-block text-sm underline">Back to guests</Link>
-      </div>
-    )
+    return <div className="rounded-2xl border bg-white p-10 text-center"><p className="font-medium">Guest not found</p><Link href="/guests" className="mt-2 inline-block text-sm underline">Back to guests</Link></div>
   }
 
-  const dirty = edits !== null && JSON.stringify(edits) !== JSON.stringify(data)
+  const dirty = edits !== null && Object.keys(edits).some((field) => edits[field as keyof GuestEdits] !== initialForm?.[field as keyof GuestEdits])
+  const setField = (field: "firstName" | "lastName" | "email" | "address" | "phoneNumber" | "checkInDate" | "checkOutDate", value: string) => setEdits((current) => ({
+    ...(current ?? form),
+    [field]: value,
+  }))
+  const setNumberField = (field: "roomNumber" | "floorNumber", value: string) => setEdits((current) => ({
+    ...(current ?? form),
+    [field]: Number(value),
+  }))
 
   async function save() {
-    if (!form) return
-    setSaving(true)
+    if (!edits) return
     try {
-      const { id: _id, ...rest } = form
-      void _id
-      await updateGuest(id, rest)
+      await updateMutation.mutateAsync({
+        ...edits,
+        email: edits.email.trim() || null,
+        address: edits.address.trim() || null,
+      })
       toast.success("Guest profile saved")
       setEdits(null)
-      reload()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't save")
-    } finally {
-      setSaving(false)
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Couldn't save guest")
     }
   }
 
-  async function openConversation() {
-    const c = await findConversationByGuest(id)
-    if (c) router.push(`/conversations/${c.id}`)
-    else toast.info("This guest hasn't started a conversation yet")
-  }
-
-  function addPref(e: React.FormEvent) {
-    e.preventDefault()
-    const v = newPref.trim()
-    if (v && form && !form.preferences.includes(v)) setForm({ ...form, preferences: [...form.preferences, v] })
-    setNewPref("")
-  }
-
-  return (
-    <>
-      <Link href="/guests" className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-4" /> Guests
-      </Link>
-
-      <div className="mb-6 flex flex-wrap items-center gap-4">
-        <Avatar name={form.name} size="lg" />
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{form.name}</h1>
-          <div className="mt-1.5 flex items-center gap-2 text-sm text-muted-foreground">
-            <GuestStatusPill status={form.status} /> Last contact {timeAgo(form.lastContactAt)}
-          </div>
+  return <>
+    <Link href="/guests" className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" /> Guests</Link>
+    <div className="mb-6 flex flex-wrap items-center gap-4">
+      <Avatar name={`${form.firstName} ${form.lastName}`} size="lg" />
+      <div className="min-w-0 flex-1"><h1 className="text-2xl font-semibold tracking-tight">{form.firstName} {form.lastName}</h1><p className="mt-1 text-sm text-muted-foreground">Guest profile · Added {new Date(data.createdAt).toLocaleDateString()}</p></div>
+      <Button className="rounded-xl" disabled={!dirty || saving} onClick={save}><Save /> {saving ? "Saving…" : "Save changes"}</Button>
+    </div>
+    <section className="max-w-3xl space-y-6 rounded-2xl border bg-white p-6">
+      <div>
+        <h2 className="font-semibold">Contact details</h2>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-2"><Label htmlFor="guest-first-name">First name</Label><Input id="guest-first-name" maxLength={100} value={form.firstName} onChange={(event) => setField("firstName", event.target.value)} /></div>
+          <div className="space-y-2"><Label htmlFor="guest-last-name">Last name</Label><Input id="guest-last-name" maxLength={100} value={form.lastName} onChange={(event) => setField("lastName", event.target.value)} /></div>
+          <div className="space-y-2"><Label htmlFor="guest-profile-email">Email <span className="text-muted-foreground">(optional)</span></Label><Input id="guest-profile-email" type="email" value={form.email} onChange={(event) => setField("email", event.target.value)} /></div>
+          <div className="space-y-2"><Label htmlFor="guest-profile-address">Address <span className="text-muted-foreground">(optional)</span></Label><Input id="guest-profile-address" autoComplete="street-address" value={form.address} onChange={(event) => setField("address", event.target.value)} /></div>
+          <div className="space-y-2"><Label htmlFor="guest-profile-phone">Phone number</Label><Input id="guest-profile-phone" type="tel" maxLength={32} value={form.phoneNumber} onChange={(event) => setField("phoneNumber", event.target.value)} /></div>
         </div>
-        <Button variant="outline" className="rounded-xl" onClick={openConversation}>
-          <MessageSquare /> Open conversation
-        </Button>
-        <Button className="rounded-xl" disabled={!dirty || saving} onClick={save}>{saving ? "Saving…" : "Save changes"}</Button>
       </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="space-y-4 rounded-2xl border bg-white p-6">
-          <h2 className="font-semibold">Contact & stay</h2>
-          <div className="space-y-2">
-            <Label htmlFor="p-name">Name</Label>
-            <Input id="p-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="p-num">WhatsApp number</Label>
-              <Input id="p-num" value={form.whatsappNumber} onChange={(e) => setForm({ ...form, whatsappNumber: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="p-room">Room number</Label>
-              <Input id="p-room" value={form.roomNumber ?? ""} onChange={(e) => setForm({ ...form, roomNumber: e.target.value || null })} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="p-in">Check-in</Label>
-              <Input id="p-in" type="date" value={form.checkIn ?? ""} onChange={(e) => setForm({ ...form, checkIn: e.target.value || null })} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="p-out">Check-out</Label>
-              <Input id="p-out" type="date" value={form.checkOut ?? ""} onChange={(e) => setForm({ ...form, checkOut: e.target.value || null })} />
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-6">
-            <div className="space-y-2">
-              <Label>Status</Label>
-              <div><PillSelect label="Guest status" value={form.status} onChange={(v) => setForm({ ...form, status: v })} options={STATUS_OPTIONS} /></div>
-            </div>
-            <div className="flex items-center gap-2 pt-6">
-              <Switch id="p-optin" checked={form.optedInMarketing} onCheckedChange={(v) => setForm({ ...form, optedInMarketing: v })} />
-              <Label htmlFor="p-optin">Opted in to marketing</Label>
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-4 rounded-2xl border bg-white p-6">
-          <h2 className="font-semibold">Preferences & notes</h2>
-          <div className="space-y-2">
-            <Label htmlFor="p-pref">Preferences</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {form.preferences.map((p) => (
-                <span key={p} className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-0.5 pr-1 pl-2.5 text-xs font-medium">
-                  {p}
-                  <button type="button" aria-label={`Remove ${p}`} className="flex size-4 items-center justify-center rounded-full hover:bg-slate-300" onClick={() => setForm({ ...form, preferences: form.preferences.filter((x) => x !== p) })}>
-                    <X className="size-3" />
-                  </button>
-                </span>
-              ))}
-              {form.preferences.length === 0 && <span className="text-sm text-muted-foreground">No preferences recorded</span>}
-            </div>
-            <form onSubmit={addPref} className="flex gap-2">
-              <Input id="p-pref" placeholder="e.g. Vegetarian, High floor" value={newPref} onChange={(e) => setNewPref(e.target.value)} />
-              <Button type="submit" variant="outline" aria-label="Add preference"><Plus /></Button>
-            </form>
-          </div>
-          <div className="space-y-2">
-            <Label>Loyalty tier</Label>
-            <div><PillSelect label="Loyalty tier" value={form.loyaltyTier ?? "none"} onChange={(v) => setForm({ ...form, loyaltyTier: v === "none" ? null : (v as Guest["loyaltyTier"]) })} options={TIERS} /></div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="p-notes">Staff notes</Label>
-            <Textarea id="p-notes" rows={5} placeholder="Internal notes — never shown to the guest" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-          </div>
-        </section>
+      <div className="border-t pt-5">
+        <h2 className="font-semibold">Stay details</h2>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-2"><Label htmlFor="guest-profile-check-in">Check-in date</Label><Input id="guest-profile-check-in" type="date" value={form.checkInDate} onChange={(event) => setField("checkInDate", event.target.value)} /></div>
+          <div className="space-y-2"><Label htmlFor="guest-profile-check-out">Check-out date</Label><Input id="guest-profile-check-out" type="date" min={dayAfterGuestDate(form.checkInDate)} value={form.checkOutDate} onChange={(event) => setField("checkOutDate", event.target.value)} /></div>
+          <div className="space-y-2"><Label htmlFor="guest-profile-room">Room number</Label><Input id="guest-profile-room" type="number" min="1" step="1" value={form.roomNumber} onChange={(event) => setNumberField("roomNumber", event.target.value)} /></div>
+          <div className="space-y-2"><Label htmlFor="guest-profile-floor">Floor number</Label><Input id="guest-profile-floor" type="number" step="1" value={form.floorNumber} onChange={(event) => setNumberField("floorNumber", event.target.value)} /></div>
+        </div>
       </div>
-    </>
-  )
+      <div className="border-t pt-4 text-sm text-muted-foreground">Stay: {formatGuestDate(form.checkInDate)} – {formatGuestDate(form.checkOutDate)} · Room {form.roomNumber}, floor {form.floorNumber}<br />Last updated {new Date(data.updatedAt).toLocaleString()}</div>
+    </section>
+  </>
 }

@@ -1,6 +1,21 @@
-import { StatusPill } from "@/components/app/status-pill"
 import { initials } from "@/lib/format"
-import type { GuestStatus } from "@/lib/api/guests"
+import type { Guest } from "@/lib/api/guests"
+
+export function guestName(guest: Pick<Guest, "firstName" | "lastName">) {
+  return `${guest.firstName} ${guest.lastName}`.trim()
+}
+
+export function formatGuestDate(date: string) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString()
+}
+
+export function dayAfterGuestDate(date: string): string | undefined {
+  if (!date) return undefined
+  const nextDate = new Date(`${date}T00:00:00Z`)
+  if (Number.isNaN(nextDate.valueOf())) return undefined
+  nextDate.setUTCDate(nextDate.getUTCDate() + 1)
+  return nextDate.toISOString().slice(0, 10)
+}
 
 export function Avatar({ name, size = "md" }: { name: string; size?: "md" | "lg" }) {
   return (
@@ -9,15 +24,3 @@ export function Avatar({ name, size = "md" }: { name: string; size?: "md" | "lg"
     </span>
   )
 }
-
-export function GuestStatusPill({ status }: { status: GuestStatus }) {
-  if (status === "vip") return <StatusPill tone="solid">VIP</StatusPill>
-  if (status === "in_house") return <StatusPill tone="progress">In-house</StatusPill>
-  return <StatusPill tone="neutral">Checked-out</StatusPill>
-}
-
-export const STATUS_OPTIONS: { value: GuestStatus; label: string }[] = [
-  { value: "in_house", label: "In-house" },
-  { value: "checked_out", label: "Checked-out" },
-  { value: "vip", label: "VIP" },
-]
