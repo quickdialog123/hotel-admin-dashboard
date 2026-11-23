@@ -21,6 +21,7 @@ import { saveTemplateMediaPreview } from "@/lib/api/template-media-cache"
 const STEPS = ["Basic Details", "Header", "Body", "Footer", "Buttons", "Review"]
 const DEFAULT_STEPS = ["Basic Details", "Content", "Review"]
 const CATALOG_STEPS = ["Basic Details", "Body", "Footer", "Review"]
+const MULTI_PRODUCT_STEPS = ["Basic Details", "Header", "Body", "Footer", "Review"]
 const CATEGORIES: { value: TemplateCategory; label: string }[] = [
   { value: "MARKETING", label: "Marketing" },
   { value: "UTILITY", label: "Utility" },
@@ -59,8 +60,8 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
   const [step, setStep] = useState(0)
   const [name, setName] = useState(initial?.name ?? "")
   const [category, setCategory] = useState<TemplateCategory>(initial?.category ?? "MARKETING")
-  const [marketingType, setMarketingType] = useState<MarketingTemplateType>(initial?.marketingType ?? (initial?.buttons.some((button) => button.type === "CATALOG") ? "CATALOG" : "DEFAULT"))
-  const [catalogFormat, setCatalogFormat] = useState<CatalogFormat>(initial?.catalogFormat ?? "CATALOG_MESSAGE")
+  const [marketingType, setMarketingType] = useState<MarketingTemplateType>(initial?.marketingType ?? (initial?.buttons.some((button) => button.type === "CATALOG" || button.type === "MPM") ? "CATALOG" : "DEFAULT"))
+  const [catalogFormat, setCatalogFormat] = useState<CatalogFormat>(initial?.catalogFormat ?? (initial?.buttons.some((button) => button.type === "MPM") ? "MULTI_PRODUCT_MESSAGE" : "CATALOG_MESSAGE"))
   const [variableType, setVariableType] = useState<VariableType>(initial?.variableType ?? "NAME")
   const [language, setLanguage] = useState(initial?.language ?? "en_GB")
   const [headerType, setHeaderType] = useState<HeaderType | "NONE">(initial?.header?.type ?? "NONE")
@@ -72,8 +73,8 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
   const mediaInputRef = useRef<HTMLInputElement>(null)
   const [body, setBody] = useState(initial?.body ?? "")
   const [footer, setFooter] = useState(initial?.footer ?? "")
-  const [buttonType, setButtonType] = useState<ButtonType | "NONE">(initial?.buttons[0]?.type ?? "NONE")
-  const [buttons, setButtons] = useState<TemplateButton[]>(initial?.buttons ?? [])
+  const [buttonType, setButtonType] = useState<ButtonType | "NONE">(initial?.buttons[0]?.type === "CATALOG" || initial?.buttons[0]?.type === "MPM" ? "NONE" : initial?.buttons[0]?.type ?? "NONE")
+  const [buttons, setButtons] = useState<TemplateButton[]>(initial?.buttons.filter((button) => button.type !== "CATALOG" && button.type !== "MPM") ?? [])
   const [examples, setExamples] = useState<Record<string, string>>(initial?.sampleValues ?? {})
   const [touched, setTouched] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -81,20 +82,20 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
 
   const isCatalogMessage = category === "MARKETING" && marketingType === "CATALOG" && catalogFormat === "CATALOG_MESSAGE"
   const isMultiProductMessage = category === "MARKETING" && marketingType === "CATALOG" && catalogFormat === "MULTI_PRODUCT_MESSAGE"
-  const header: TemplateHeader | null = isCatalogMessage || headerType === "NONE" ? null : headerType === "TEXT" ? { type: "TEXT", text: headerText } : { type: headerType, mediaSample: headerFile }
-  const cleanButtons: TemplateButton[] = isCatalogMessage ? [{ type: "CATALOG", text: "View catalog" }] : buttons.filter((b) => b.text.trim())
+  const header: TemplateHeader | null = isCatalogMessage ? null : isMultiProductMessage ? { type: "TEXT", text: headerText } : headerType === "NONE" ? null : headerType === "TEXT" ? { type: "TEXT", text: headerText } : { type: headerType, mediaSample: headerFile }
+  const cleanButtons: TemplateButton[] = isCatalogMessage ? [{ type: "CATALOG", text: "View catalog" }] : isMultiProductMessage ? [{ type: "MPM", text: "View items" }] : buttons.filter((b) => b.text.trim())
   const vars = extractVariables(body + (isCatalogMessage ? "" : " " + headerText))
   const sampleValues = Object.fromEntries(vars.map((v) => [v, examples[v] ?? ""]))
   const isDefaultMarketing = category === "MARKETING" && marketingType === "DEFAULT"
-  const steps = isDefaultMarketing ? DEFAULT_STEPS : isCatalogMessage ? CATALOG_STEPS : STEPS
+  const steps = isDefaultMarketing ? DEFAULT_STEPS : isCatalogMessage ? CATALOG_STEPS : isMultiProductMessage ? MULTI_PRODUCT_STEPS : STEPS
   const reviewStep = steps.length - 1
 
   const nameOk = NAME_RE.test(name)
   const bodyOk = body.trim().length > 0 && body.length <= 1024
-  const headerOk = headerType === "NONE" || (headerType === "TEXT" ? headerText.trim().length > 0 : !!headerFile)
+  const headerOk = isMultiProductMessage ? headerText.trim().length > 0 : headerType === "NONE" || (headerType === "TEXT" ? headerText.trim().length > 0 : !!headerFile)
   const variablesOk = !isDefaultMarketing || vars.every((v) => variableType === "NUMBER" ? /^\d+$/.test(v) : /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(v))
   const buttonsOk = buttonType === "NONE" || buttons.every((b) => b.text.trim() && (b.type !== "URL" || /^https?:\/\//.test(b.url ?? "")) && (b.type !== "PHONE_NUMBER" || /^\+?[0-9]{7,}$/.test(b.phoneNumber ?? "")))
-  const stepOk = isDefaultMarketing ? [nameOk, headerOk && bodyOk && buttonsOk && variablesOk, true][step] : isCatalogMessage ? [nameOk, bodyOk, true, true][step] : [nameOk, headerOk, bodyOk, true, buttonsOk, true][step]
+  const stepOk = isDefaultMarketing ? [nameOk, headerOk && bodyOk && buttonsOk && variablesOk, true][step] : isCatalogMessage ? [nameOk, bodyOk, true, true][step] : isMultiProductMessage ? [nameOk, headerOk, bodyOk, true, true][step] : [nameOk, headerOk, bodyOk, true, buttonsOk, true][step]
 
   function next() {
     setTouched(true)
@@ -137,10 +138,6 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
   }
 
   async function save(submit: boolean) {
-    if (submit && isMultiProductMessage) {
-      toast.error("Multi-product templates need a separate Meta format and cannot be submitted yet")
-      return
-    }
     setSaving(true)
     try {
       let submittedHeader = header
@@ -164,9 +161,9 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
       }
       else await saveTemplateDraft(input, draftId)
       toast.success(submit ? "Template sent to Meta" : "Draft saved in this browser")
-      router.push("/campaigns")
+      router.push("/templates")
     } catch (e) {
-      let message = e instanceof Error ? e.message : "Couldn't save campaign"
+      let message = e instanceof Error ? e.message : "Couldn't save template"
       if (e instanceof Error && "response" in e && (e as { response?: Response }).response) {
         const response = (e as { response: Response }).response
         try {
@@ -183,7 +180,7 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
     }
   }
 
-  const invalidAll = !nameOk || !bodyOk || (!isCatalogMessage && (!headerOk || !buttonsOk || !variablesOk)) || vars.some((v) => !sampleValues[v]?.trim())
+  const invalidAll = !nameOk || !bodyOk || (!isCatalogMessage && (!headerOk || (!isMultiProductMessage && !buttonsOk) || !variablesOk)) || vars.some((v) => !sampleValues[v]?.trim())
 
   return (
     <div className="grid gap-8 lg:grid-cols-[200px_1fr_320px]">
@@ -210,6 +207,7 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
               <Label>Catalog format</Label>
               <p className="text-xs text-muted-foreground">Choose the message format that best fits your needs.</p>
               <div><PillSelect label="Catalog format" value={catalogFormat} onChange={setCatalogFormat} options={CATALOG_FORMATS} /></div>
+              {isMultiProductMessage && <p className="text-xs text-muted-foreground">Include up to 30 products from your catalog. Useful for showcasing a new collection or a specific product category. Specify which products via the API when sending the template.</p>}
               <p className="text-xs text-muted-foreground">Your catalog must be linked to this WhatsApp account. <button type="button" onClick={() => setCatalogDialogOpen(true)} className="font-medium text-foreground underline">Connect a catalog</button></p>
             </div>}
             <div className="space-y-2">
@@ -229,17 +227,17 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
           <div className="space-y-5">
             {isDefaultMarketing && <h3 className="font-medium">Header</h3>}
             <div className="space-y-2">
-              <Label>Header type <span className="font-normal text-muted-foreground">(optional)</span></Label>
-              {headerType !== "IMAGE" && headerType !== "VIDEO" && <div><PillSelect label="Header type" value={headerType} onChange={setHeaderType} options={HEADER_TYPES} /></div>}
+              <Label>Header type {!isMultiProductMessage && <span className="font-normal text-muted-foreground">(optional)</span>}</Label>
+              {isMultiProductMessage ? <p className="text-sm text-muted-foreground">Text</p> : headerType !== "IMAGE" && headerType !== "VIDEO" && <div><PillSelect label="Header type" value={headerType} onChange={setHeaderType} options={HEADER_TYPES} /></div>}
             </div>
-            {headerType === "TEXT" && (
+            {(headerType === "TEXT" || isMultiProductMessage) && (
               <div className="space-y-2">
                 <Label htmlFor="t-htext">Header text</Label>
                 <Input id="t-htext" maxLength={60} value={headerText} onChange={(e) => setHeaderText(e.target.value)} aria-invalid={touched && !headerOk} />
-                {touched && !headerOk && <p className="text-sm text-destructive">Enter header text or choose None.</p>}
+                {touched && !headerOk && <p className="text-sm text-destructive">Enter header text.</p>}
               </div>
             )}
-            {headerType !== "NONE" && headerType !== "TEXT" && (
+            {!isMultiProductMessage && headerType !== "NONE" && headerType !== "TEXT" && (
               <div className="space-y-2">
                 <Label htmlFor="t-hfile">Sample {headerType.toLowerCase()}</Label>
                 <input ref={mediaInputRef} id="t-hfile" type="file" accept={headerType === "IMAGE" ? "image/jpeg,image/png" : "video/mp4"} className="sr-only" onChange={(e) => { selectMedia(e.target.files?.[0]); e.target.value = "" }} />
@@ -279,7 +277,7 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
           </div>
         )}
 
-        {((step === 4 && !isDefaultMarketing && !isCatalogMessage) || (step === 1 && isDefaultMarketing)) && (
+        {((step === 4 && !isDefaultMarketing && !isCatalogMessage && !isMultiProductMessage) || (step === 1 && isDefaultMarketing)) && (
           <div className="mt-6 space-y-5">
             {isDefaultMarketing && <h3 className="font-medium">Buttons</h3>}
             <div className="space-y-2">
@@ -327,19 +325,19 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
               ))}
             </dl>
             {invalidAll && <p role="alert" className="text-sm text-destructive">Some steps are incomplete — go back and fix them before submitting.</p>}
-            {isMultiProductMessage && <p role="alert" className="text-sm text-destructive">Multi-product templates need a separate Meta format and cannot be submitted yet.</p>}
+            {isMultiProductMessage && <p className="text-sm text-muted-foreground">Select up to 30 products through the API when sending this approved template.</p>}
             <p className="text-sm text-muted-foreground">Submitting sends this template to Meta for review. You can&apos;t broadcast it until it&apos;s Approved.</p>
           </div>
         )}
 
         <div className="mt-8 flex items-center justify-between gap-2 border-t pt-4">
-          <Button variant="ghost" onClick={step === 0 ? () => router.push("/campaigns") : () => setStep(step - 1)}>{step === 0 ? "Cancel" : "Back"}</Button>
+          <Button variant="ghost" onClick={step === 0 ? () => router.push("/templates") : () => setStep(step - 1)}>{step === 0 ? "Cancel" : "Back"}</Button>
           {step < reviewStep ? (
             <Button className="rounded-xl" onClick={next}>Next</Button>
           ) : (
             <div className="flex gap-2">
               <Button variant="outline" className="rounded-xl" disabled={saving || !nameOk} onClick={() => save(false)}>Save draft locally</Button>
-              <Button className="rounded-xl" disabled={saving || invalidAll || isMultiProductMessage} onClick={() => save(true)}>{saving && <Loader2 className="animate-spin" />} {initial && "id" in initial ? "Save changes to Meta" : "Submit for approval"}</Button>
+              <Button className="rounded-xl" disabled={saving || invalidAll} onClick={() => save(true)}>{saving && <Loader2 className="animate-spin" />} {initial && "id" in initial ? "Save changes to Meta" : "Submit for approval"}</Button>
             </div>
           )}
         </div>

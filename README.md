@@ -18,7 +18,7 @@ app/
   (app)/                 authenticated shell (top nav) + every section
     dashboard/ whatsapp/ settings/
     receptionist/ (nav: "AI Agent")  knowledge-base/ (+ assistant/)
-    broadcasts/ (+ new/, [id]/)  campaigns/ (+ new/)  catalogue/      (nav: "Marketing")
+    broadcasts/ (+ new/, [id]/)  templates/ (+ new/, [id]/)  catalogue/      (nav: "Marketing")
     conversations/ (+ [id]/) (nav: "Inbox")  guests/ (+ [id]/)         (nav: "Conversations")
 components/
   ui/                    shadcn primitives
@@ -38,7 +38,7 @@ Five top-level items: **Dashboard**, **WhatsApp**, and three grouped pills. Clic
 | Pill | Default page | Dropdown |
 | --- | --- | --- |
 | AI Agent | `/receptionist` | Knowledge Base |
-| Marketing | `/broadcasts` | Campaigns, Catalogue |
+| Marketing | `/broadcasts` | Templates, Catalogue |
 | Conversations | `/conversations` (labelled "Inbox") | Guests |
 
 ## Swapping the mock layer for the real backend

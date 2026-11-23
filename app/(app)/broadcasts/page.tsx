@@ -28,14 +28,14 @@ export default function BroadcastsPage() {
     <>
       <PageHeader
         title="Broadcasts"
-        description="Send approved campaigns to groups of guests and track delivery."
+        description="Send approved templates to groups of guests and track delivery."
         actions={
           <Link href="/broadcasts/new" className={buttonVariants({ className: "h-9 rounded-lg" })}>
             <Plus /> New broadcast
           </Link>
         }
       />
-      <SearchBar className="mb-4" value={search} onChange={setSearch} placeholder="Search by campaign or segment..." label="Search broadcasts" />
+      <SearchBar className="mb-4" value={search} onChange={setSearch} placeholder="Search by template or segment..." label="Search broadcasts" />
       {error ? (
         <ErrorState message={error} onRetry={reload} />
       ) : !data ? (
@@ -47,7 +47,7 @@ export default function BroadcastsPage() {
           <EmptyState
             icon={<Radio className="size-5" />}
             title="No broadcasts yet"
-            description="Send your first broadcast to a group of guests using an approved campaign."
+            description="Send your first broadcast to a group of guests using an approved template."
             action={<Link href="/broadcasts/new" className={buttonVariants({ className: "rounded-lg" })}>New broadcast</Link>}
           />
         )
