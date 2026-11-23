@@ -25,7 +25,7 @@ export function TemplatePreview({ header, body, footer, buttons, values = {} }: 
           {footer && <p className="mt-1 text-[11px] text-slate-500">{footer}</p>}
         </WaBubble>
         {buttons.filter((b) => b.text.trim()).map((b, i) => {
-          const Icon = b.type === "CATALOG" ? ShoppingBag : b.type === "URL" ? ExternalLink : b.type === "PHONE_NUMBER" ? Phone : Reply
+          const Icon = b.type === "CATALOG" || b.type === "MPM" ? ShoppingBag : b.type === "URL" ? ExternalLink : b.type === "PHONE_NUMBER" ? Phone : Reply
           return (
             <div key={i} className="mt-1 flex items-center justify-center gap-1.5 rounded-xl bg-white py-2 text-xs font-medium text-sky-700 shadow-sm">
               <Icon className="size-3.5" /> {b.text}

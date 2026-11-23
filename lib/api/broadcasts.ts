@@ -13,7 +13,7 @@ export type CatalogFormat = "CATALOG_MESSAGE" | "MULTI_PRODUCT_MESSAGE"
 export type VariableType = "NAME" | "NUMBER"
 export type TemplateStatus = string
 export type HeaderType = "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT"
-export type ButtonType = "QUICK_REPLY" | "URL" | "PHONE_NUMBER" | "CATALOG"
+export type ButtonType = "QUICK_REPLY" | "URL" | "PHONE_NUMBER" | "CATALOG" | "MPM"
 
 export type TemplateHeader = {
   type: HeaderType
@@ -69,7 +69,7 @@ export function renderTemplateText(text: string, values: Record<string, string>)
   return text.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, k: string) => values[k]?.trim() || `{{${k}}}`)
 }
 
-const templateSchema = z.object({ id: z.string(), name: z.string(), category: z.enum(["MARKETING", "UTILITY", "AUTHENTICATION"]), marketingType: z.enum(["DEFAULT", "CATALOG"]).optional().catch("DEFAULT"), catalogFormat: z.enum(["CATALOG_MESSAGE", "MULTI_PRODUCT_MESSAGE"]).optional(), variableType: z.enum(["NAME", "NUMBER"]).optional(), language: z.string(), header: z.union([z.object({ type: z.enum(["TEXT", "IMAGE", "VIDEO", "DOCUMENT"]), text: z.string().optional(), mediaSample: z.string().optional(), mediaUrl: z.string().optional(), mediaHandle: z.string().optional() }), z.null()]), body: z.string(), footer: z.string().nullable(), buttons: z.array(z.object({ type: z.enum(["QUICK_REPLY", "URL", "PHONE_NUMBER", "CATALOG"]), text: z.string(), url: z.string().optional(), phoneNumber: z.string().optional() })), status: z.string(), broadcastEligible: z.boolean(), rejectionReason: z.string().optional() })
+const templateSchema = z.object({ id: z.string(), name: z.string(), category: z.enum(["MARKETING", "UTILITY", "AUTHENTICATION"]), marketingType: z.enum(["DEFAULT", "CATALOG"]).optional().catch("DEFAULT"), catalogFormat: z.enum(["CATALOG_MESSAGE", "MULTI_PRODUCT_MESSAGE"]).optional(), variableType: z.enum(["NAME", "NUMBER"]).optional(), language: z.string(), header: z.union([z.object({ type: z.enum(["TEXT", "IMAGE", "VIDEO", "DOCUMENT"]), text: z.string().optional(), mediaSample: z.string().optional(), mediaUrl: z.string().optional(), mediaHandle: z.string().optional() }), z.null()]), body: z.string(), footer: z.string().nullable(), buttons: z.array(z.object({ type: z.enum(["QUICK_REPLY", "URL", "PHONE_NUMBER", "CATALOG", "MPM"]), text: z.string(), url: z.string().optional(), phoneNumber: z.string().optional() })), status: z.string(), broadcastEligible: z.boolean(), rejectionReason: z.string().optional() })
 const pageSchema = z.object({ data: z.array(templateSchema), paging: z.object({ after: z.string().nullable() }) })
 const templateInputSchema = z.object({
   name: z.string().regex(/^[a-z0-9_]+$/), category: z.enum(["MARKETING", "UTILITY"]),
@@ -84,6 +84,7 @@ const templateInputSchema = z.object({
     z.object({ type: z.literal("URL"), text: z.string().trim().min(1).max(25), url: z.url().startsWith("https://") }),
     z.object({ type: z.literal("PHONE_NUMBER"), text: z.string().trim().min(1).max(25), phoneNumber: z.string().regex(/^\+[1-9]\d{6,14}$/) }),
     z.object({ type: z.literal("CATALOG"), text: z.literal("View catalog") }),
+    z.object({ type: z.literal("MPM"), text: z.literal("View items") }),
   ])).max(3), sampleValues: z.record(z.string(), z.string().min(1)),
 })
 
