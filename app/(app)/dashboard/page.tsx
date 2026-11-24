@@ -16,7 +16,7 @@ const quickLinks = [
   { href: "/catalogue", label: "Catalogue", desc: "Manage room service items", icon: Utensils },
   { href: "/guests", label: "Guests", desc: "Browse the guest directory", icon: Users },
   { href: "/receptionist", label: "AI Agent", desc: "Tone, persona and behaviour", icon: Bot },
-  { href: "/broadcasts", label: "Broadcasts", desc: "Templates & sends", icon: Radio },
+  { href: "/campaigns", label: "Campaigns", desc: "Manage WhatsApp campaigns", icon: Radio },
 ]
 
 export default function DashboardPage() {
