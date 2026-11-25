@@ -13,8 +13,7 @@ export function isInHouseOn(guest: Pick<Guest, "checkInDate" | "checkOutDate">, 
 
 export function recipientIneligibility(guest: Guest, category: string): string | null {
   if (!guest.phoneNumber.trim()) return "Phone number missing"
-  // The current guest API has no marketing consent field. Unknown consent cannot qualify.
-  if (category === "MARKETING") return "Marketing consent unavailable"
+  if (category === "MARKETING" && !guest.marketingConsent) return "Marketing consent not given"
   return null
 }
 

@@ -27,7 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { extractVariables, listTemplates, type MessageTemplate, type TemplateCategory } from "@/lib/api/broadcasts"
 import { getCatalogConnection, listCatalogueItems } from "@/lib/api/catalogue"
-import { campaignKeys, getCampaign, saveCampaign, type Campaign, type CampaignInput } from "@/lib/api/campaigns-mock"
+import { campaignKeys, createCampaign, getCampaign, updateCampaign, type Campaign } from "@/lib/api/campaigns"
 import { guestKeys, listGuests } from "@/lib/api/guests"
 import { getHotelProfile } from "@/lib/api/settings"
 import { audienceIssues, dateInTimeZone } from "@/lib/campaigns/recipients"
@@ -103,14 +103,15 @@ export default function NewCampaignPage({ campaignId }: { campaignId?: string })
   const hotelId = session?.user.hotelId
   const savedCampaign = useQuery({
     queryKey: campaignKeys.detail(hotelId ?? "", campaignId ?? ""),
-    queryFn: () => getCampaign(hotelId!, campaignId!),
+    queryFn: () => getCampaign(campaignId!),
     enabled: Boolean(hotelId && campaignId),
   })
 
   if (sessionStatus === "loading" || (campaignId && savedCampaign.isLoading)) return <ListSkeleton rows={5} />
   if (!hotelId) return <ErrorState message="No hotel is assigned to your account." />
   if (campaignId && savedCampaign.error) return <ErrorState message={savedCampaign.error.message} onRetry={() => void savedCampaign.refetch()} />
-  if (campaignId && !savedCampaign.data) return <EmptyState title="Campaign not found" description="It may have been removed from this browser." />
+  if (campaignId && !savedCampaign.data) return <EmptyState title="Campaign not found" description="It may have been deleted or is unavailable to your hotel." />
+  if (campaignId && savedCampaign.data?.status !== "DRAFT") return <EmptyState title="Campaign cannot be edited" description="Only draft campaigns can be edited." />
   return <CampaignWizard key={campaignId ?? "new"} campaignId={campaignId} hotelId={hotelId} initialCampaign={savedCampaign.data ?? undefined} />
 }
 
@@ -119,19 +120,19 @@ function CampaignWizard({ campaignId, hotelId, initialCampaign }: { campaignId?:
   const queryClient = useQueryClient()
   const [step, setStep] = useState(0)
   const [name, setName] = useState(initialCampaign?.name ?? "")
-  const [description, setDescription] = useState(initialCampaign?.description ?? "")
-  const [selectedGuestIds, setSelectedGuestIds] = useState<string[]>(initialCampaign?.audience.guestIds ?? [])
+  const [description, setDescription] = useState("")
+  const [selectedGuestIds, setSelectedGuestIds] = useState<string[]>(initialCampaign?.guests.map(({ guest }) => guest.id) ?? [])
   const [guestSearch, setGuestSearch] = useState("")
-  const [inHouse, setInHouse] = useState(initialCampaign?.audience.inHouse ?? false)
-  const [dateOverride, setDateOverride] = useState(initialCampaign?.audience.referenceDate || null)
+  const [inHouse, setInHouse] = useState(false)
+  const [dateOverride, setDateOverride] = useState<string | null>(null)
   const [attempted, setAttempted] = useState(false)
-  const [selectedTemplateId, setSelectedTemplateId] = useState(initialCampaign?.templateId ?? "")
+  const [selectedTemplateId, setSelectedTemplateId] = useState("")
   const [selectionAttempted, setSelectionAttempted] = useState(false)
   const [search, setSearch] = useState("")
   const [category, setCategory] = useState<TemplateCategory | "ALL">("ALL")
   const [cachedMedia, setCachedMedia] = useState<{ template: MessageTemplate; url: string } | null>(null)
-  const [mappings, setMappings] = useState<Record<string, MappingSource | "">>(initialCampaign?.mappings ?? {})
-  const [customSamples, setCustomSamples] = useState<Record<string, string>>(initialCampaign?.customSamples ?? {})
+  const [mappings, setMappings] = useState<Record<string, MappingSource | "">>({})
+  const [customSamples, setCustomSamples] = useState<Record<string, string>>({})
   const [examples, setExamples] = useState({ guestFirstName: "Sofia", guestLastName: "Martin", hotelName: "Atlas Horizon" })
   const [mappingAttempted, setMappingAttempted] = useState(false)
   const [previewMode, setPreviewMode] = useState<"mobile" | "web">("mobile")
@@ -139,7 +140,8 @@ function CampaignWizard({ campaignId, hotelId, initialCampaign }: { campaignId?:
   const [productSearch, setProductSearch] = useState("")
   const [loadingMoreProducts, setLoadingMoreProducts] = useState(false)
   const [productPageError, setProductPageError] = useState("")
-  const [productSelection, setProductSelection] = useState(initialCampaign?.productSelection ?? null)
+  const [productSelection, setProductSelection] = useState<{ templateId: string; catalogId: string; productIds: string[] } | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const connection = useQuery({
     queryKey: ["whatsapp", "connection"],
@@ -175,7 +177,11 @@ function CampaignWizard({ campaignId, hotelId, initialCampaign }: { campaignId?:
     enabled: step >= 2 && connection.data?.status === "CONNECTED" && hasCatalogMessages,
   })
 
-  const selectedTemplate = approvedTemplates.find((template) => template.id === selectedTemplateId) ?? null
+  const savedTemplate = initialCampaign
+    ? templates.data?.find((template) => template.name === initialCampaign.templateName && template.language === initialCampaign.templateLanguage)
+    : undefined
+  const activeTemplateId = selectedTemplateId || savedTemplate?.id || ""
+  const selectedTemplate = approvedTemplates.find((template) => template.id === activeTemplateId) ?? null
   const catalogId = catalog.data?.status === "connected" ? catalog.data.catalog?.id : undefined
   const isMultiProduct = selectedTemplate ? templateType(selectedTemplate) === "Multi-product catalog" : false
   const showCatalogProducts = Boolean(selectedTemplate?.buttons.some((button) => button.type === "CATALOG")) || isMultiProduct
@@ -185,8 +191,11 @@ function CampaignWizard({ campaignId, hotelId, initialCampaign }: { campaignId?:
     enabled: showCatalogProducts && Boolean(catalogId),
   })
   const availableProducts = [...new Map((products.data?.data ?? []).filter((item) => item.productId.trim()).map((item) => [item.productId, item])).values()]
-  const selectedProductIds = isMultiProduct && productSelection?.templateId === selectedTemplateId && productSelection.catalogId === catalogId
-    ? productSelection.productIds : []
+  const selectedProductIds = isMultiProduct && productSelection?.templateId === activeTemplateId && productSelection.catalogId === catalogId
+    ? productSelection.productIds
+    : isMultiProduct && !productSelection && initialCampaign && catalogId && initialCampaign.templateName === selectedTemplate?.name && initialCampaign.templateLanguage === selectedTemplate?.language
+      ? initialCampaign.productRetailerIds
+      : []
   const selectedProducts = selectedProductIds.map((id) => availableProducts.find((item) => item.productId === id)).filter((item) => item !== undefined)
   const visibleProducts = availableProducts.filter((item) => item.name.toLowerCase().includes(productSearch.trim().toLowerCase()))
   const activeVariables = selectedTemplate ? templateVariables(selectedTemplate) : []
@@ -210,7 +219,10 @@ function CampaignWizard({ campaignId, hotelId, initialCampaign }: { campaignId?:
   function toggleProduct(productId: string, checked: boolean) {
     if (!selectedTemplate || !catalogId || !productId.trim() || (checked && !availableProducts.some((item) => item.productId === productId))) return
     setProductSelection((current) => {
-      const ids = current?.templateId === selectedTemplate.id && current.catalogId === catalogId ? current.productIds : []
+      const savedIds = !current && initialCampaign?.templateName === selectedTemplate.name && initialCampaign.templateLanguage === selectedTemplate.language
+        ? initialCampaign.productRetailerIds
+        : []
+      const ids = current?.templateId === selectedTemplate.id && current.catalogId === catalogId ? current.productIds : savedIds
       const productIds = checked
         ? (ids.includes(productId) || ids.length >= maxMultiProductItems ? ids : [...ids, productId])
         : ids.filter((id) => id !== productId)
@@ -314,45 +326,46 @@ function CampaignWizard({ campaignId, hotelId, initialCampaign }: { campaignId?:
     ...(!selectedTemplate ? ["Select an approved Meta template."] : unavailableReason(selectedTemplate) ? [unavailableReason(selectedTemplate)!] : []),
     ...(selectedTemplate && productIssue(selectedTemplate) ? [productIssue(selectedTemplate)!] : []),
     ...(isMultiProduct && selectedTemplate && !selectedTemplate.broadcastEligible ? ["The template API does not mark this Multi-product template as broadcast eligible."] : []),
-    ...(isMultiProduct ? ["Multi-product campaign readiness requires a confirmed backend product identifier and section contract. Save a Draft for now."] : []),
+    ...(isMultiProduct ? ["Product IDs are saved with the draft, but the current sender does not include them in Meta messages yet."] : []),
     ...(!mappingsValid ? ["Complete all supported variable mappings."] : []),
     ...(unsupported.length ? [`Unsupported placeholders: ${unsupported.join(", ")}.`] : []),
   ]
 
-  function save(status: CampaignInput["status"]) {
+  async function saveDraft() {
     setSaveError("")
     setAttempted(true)
     if (!details.success) {
       setStep(0)
       return
     }
-    if (status === "READY" && reviewIssues.length) return
-    const previous = initialCampaign
-    const previousTemplate = previous?.templateId === selectedTemplateId ? previous : null
+    const templateName = selectedTemplate?.name ?? initialCampaign?.templateName ?? ""
+    const templateLanguage = selectedTemplate?.language ?? initialCampaign?.templateLanguage ?? ""
+    if (!templateName || !templateLanguage) {
+      setSaveError("Select an approved template before saving this draft.")
+      setStep(2)
+      return
+    }
+    const keepsSavedTemplate = initialCampaign?.templateName === templateName && initialCampaign.templateLanguage === templateLanguage
+    const productRetailerIds = productSelection?.templateId === activeTemplateId
+      ? productSelection.productIds
+      : keepsSavedTemplate ? initialCampaign.productRetailerIds : []
     try {
-      saveCampaign(hotelId, {
+      setSaving(true)
+      const input = {
         name: details.data.name,
-        description: details.data.description,
-        templateId: selectedTemplateId,
-        templateName: selectedTemplate?.name ?? previousTemplate?.templateName ?? "",
-        templateCategory: selectedTemplate?.category ?? previousTemplate?.templateCategory ?? "",
-        templateLanguage: selectedTemplate?.language ?? previousTemplate?.templateLanguage ?? "",
-        accountName: connection.data?.displayName || previous?.accountName || "",
-        accountPhone: connection.data?.phoneNumber || previous?.accountPhone || "",
-        wabaId: connection.data?.wabaId || previous?.wabaId || "",
-        mappings,
-        customSamples,
-        audience: { guestIds: [...new Set(selectedGuestIds)], referenceDate: dateOverride ?? (profile.data ? referenceDate : ""), inHouse },
-        productSelection: selectedTemplate
-          ? isMultiProduct && productSelection?.templateId === selectedTemplate.id && (!catalogId || productSelection.catalogId === catalogId) ? productSelection : null
-          : previousTemplate?.productSelection ?? null,
-        status,
-      }, campaignId)
-      void queryClient.invalidateQueries({ queryKey: campaignKeys.list(hotelId) })
-      toast.success(status === "DRAFT" ? "Local draft saved" : "Local campaign saved as ready")
-      router.replace("/campaigns")
+        templateName,
+        templateLanguage,
+        guestIds: [...new Set(selectedGuestIds)],
+        productRetailerIds,
+      }
+      const saved = campaignId ? await updateCampaign(campaignId, input) : await createCampaign(input)
+      await queryClient.invalidateQueries({ queryKey: campaignKeys.all })
+      toast.success("Campaign draft saved")
+      router.replace(`/campaigns/${saved.id}`)
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Could not save the local campaign.")
+      setSaveError(error instanceof Error ? error.message : "Could not save the campaign draft.")
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -380,13 +393,13 @@ function CampaignWizard({ campaignId, hotelId, initialCampaign }: { campaignId?:
       <PageHeader
         title={campaignId ? "Edit Campaign" : "New Campaign"}
         description="Set up the details for a WhatsApp campaign."
-        actions={<Button type="button" variant="outline" onClick={() => save("DRAFT")}>Save Draft</Button>}
+        actions={<Button type="button" variant="outline" onClick={() => void saveDraft()} disabled={saving}>{saving ? "Saving…" : "Save Draft"}</Button>}
       />
 
       <Link href="/campaigns" className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" aria-hidden /> Campaigns
       </Link>
-      <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">Campaigns are saved locally in this browser for frontend development. No backend campaign is created.</p>
+      <p className="mb-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-muted-foreground">Campaigns are saved to the hotel backend as drafts. Only the selected guest IDs and product retailer IDs are persisted; preview mappings and filter settings are not saved.</p>
       {saveError && <p role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{saveError}</p>}
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-start">
@@ -423,7 +436,7 @@ function CampaignWizard({ campaignId, hotelId, initialCampaign }: { campaignId?:
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="campaign-description">Description <span className="font-normal text-muted-foreground">(optional)</span></Label>
+            <Label htmlFor="campaign-description">Description <span className="font-normal text-muted-foreground">(preview only; not saved)</span></Label>
             <Textarea
               id="campaign-description"
               name="description"
@@ -569,7 +582,7 @@ function CampaignWizard({ campaignId, hotelId, initialCampaign }: { campaignId?:
                   <div role="radiogroup" aria-label="Approved message templates" className="space-y-3">
                     {visibleTemplates.map((template) => {
                       const reason = unavailableReason(template)
-                      const selected = selectedTemplateId === template.id
+                      const selected = activeTemplateId === template.id
                       const type = templateType(template)
                       return (
                         <button
@@ -606,7 +619,7 @@ function CampaignWizard({ campaignId, hotelId, initialCampaign }: { campaignId?:
             {selectedTemplate && isMultiProduct && <section aria-labelledby="campaign-products-heading" className="space-y-4 rounded-xl border bg-slate-50 p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div><h3 id="campaign-products-heading" className="font-semibold">Select products</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">Choose 1–{maxMultiProductItems} products from the connected catalog. This is one preview group; the backend section and retailer ID contract is still pending.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Choose 1–{maxMultiProductItems} products from the connected catalog. Their retailer IDs are saved with the draft; message support is still pending.</p>
                 </div>
                 <StatusPill tone="outline">{selectedProductIds.length} selected</StatusPill>
               </div>
@@ -768,7 +781,7 @@ function CampaignWizard({ campaignId, hotelId, initialCampaign }: { campaignId?:
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Step 5 of 5</p>
               <h2 id="review-step-heading" className="mt-1 text-xl font-semibold tracking-tight">Review & WhatsApp Preview</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Check the campaign setup and message preview before saving it locally.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Check the campaign setup and message preview before saving this draft to the backend.</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <section className="min-w-0 rounded-xl border p-4" aria-label="Campaign details review">
@@ -816,7 +829,7 @@ function CampaignWizard({ campaignId, hotelId, initialCampaign }: { campaignId?:
               </section>
               {isMultiProduct && <section className="min-w-0 rounded-xl border p-4 sm:col-span-2" aria-label="Selected products review">
                 <h3 className="mb-2 font-semibold">Selected products · {selectedProductIds.length}</h3>
-                <p className="mb-3 text-xs text-muted-foreground">Provisional selection from the connected catalog. Backend retailer IDs and section fields are not confirmed.</p>
+                <p className="mb-3 text-xs text-muted-foreground">Product retailer IDs are saved with the draft. The current sender does not yet include selected products in Meta messages.</p>
                 {selectedProductIds.length ? <ul className="space-y-1 text-sm">{selectedProductIds.map((id) => {
                   const item = availableProducts.find((product) => product.productId === id)
                   return <li key={id} className="flex flex-wrap justify-between gap-2 border-b border-slate-100 py-1 last:border-0"><span className="break-words">{item?.name ?? "Product not loaded"}</span><span className="break-all text-muted-foreground">{id}</span></li>
@@ -825,13 +838,13 @@ function CampaignWizard({ campaignId, hotelId, initialCampaign }: { campaignId?:
             </div>
             <section aria-label="Campaign readiness" className={`rounded-xl border p-4 text-sm ${reviewIssues.length ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>
               <h3 className="font-semibold">{reviewIssues.length ? "Needs attention" : "Configuration complete"}</h3>
-              {reviewIssues.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{reviewIssues.map((issue, index) => <li key={`${index}:${issue}`}>{issue}</li>)}</ul> : <p className="mt-1">All available frontend checks pass. You can save this campaign as Ready in the local development store.</p>}
+              {reviewIssues.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{reviewIssues.map((issue, index) => <li key={`${index}:${issue}`}>{issue}</li>)}</ul> : <p className="mt-1">Available frontend checks pass. Saving stores this campaign as a draft; it does not start sending.</p>}
             </section>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5">
               <Button type="button" variant="outline" size="lg" onClick={() => setStep(3)}>
                 <ArrowLeft className="size-4" aria-hidden /> Back to personalization
               </Button>
-              <Button type="button" size="lg" onClick={() => save("READY")} disabled={reviewIssues.length > 0}>Save as Ready</Button>
+              <Button type="button" size="lg" onClick={() => void saveDraft()} disabled={saving}>{saving ? "Saving…" : "Save Draft"}</Button>
             </div>
           </section>
         )}

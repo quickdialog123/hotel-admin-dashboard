@@ -1,56 +1,16 @@
 import { z } from "zod"
 
 import { apiClient } from "@/lib/api/client"
+import { guestInputSchema, guestListSchema, guestSchema, guestUpdateSchema, type Guest, type GuestInput } from "@/lib/api/guest-schemas"
 
-const guestDateSchema = z
-  .union([z.iso.date(), z.iso.datetime()])
-  .transform((date) => date.slice(0, 10))
-
-export const guestSchema = z.object({
-  id: z.uuid(),
-  hotelId: z.uuid(),
-  firstName: z.string(),
-  lastName: z.string(),
-  email: z.email().nullable().optional(),
-  address: z.string().nullable().optional(),
-  phoneNumber: z.string(),
-  checkInDate: guestDateSchema,
-  checkOutDate: guestDateSchema,
-  roomNumber: z.number().int().positive(),
-  floorNumber: z.number().int(),
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
-}).refine((guest) => guest.checkOutDate > guest.checkInDate, {
-  path: ["checkOutDate"],
-  message: "Check-out must be after check-in.",
-})
-
-export type Guest = z.infer<typeof guestSchema>
-
-export const guestInputSchema = z.object({
-  firstName: z.string().trim().min(1).max(100),
-  lastName: z.string().trim().min(1).max(100),
-  email: z.union([z.email().trim(), z.literal(""), z.null()]).transform((value) => value || null),
-  address: z.union([z.string().trim(), z.null()]).transform((value) => value || null),
-  phoneNumber: z.string().trim().min(1).max(32),
-  checkInDate: guestDateSchema,
-  checkOutDate: guestDateSchema,
-  roomNumber: z.number().int().positive(),
-  floorNumber: z.number().int(),
-}).refine((guest) => !guest.checkInDate || !guest.checkOutDate || guest.checkOutDate > guest.checkInDate, {
-  path: ["checkOutDate"],
-  message: "Check-out must be after check-in.",
-})
-
-export type GuestInput = z.infer<typeof guestInputSchema>
+export { guestInputSchema, guestListSchema, guestSchema, guestUpdateSchema }
+export type { Guest, GuestInput }
 
 export const guestKeys = {
   all: ["guests"] as const,
   list: (hotelId: string) => [...guestKeys.all, hotelId] as const,
   detail: (hotelId: string, guestId: string) => [...guestKeys.list(hotelId), guestId] as const,
 }
-
-export const guestListSchema = z.array(guestSchema)
 
 export async function listGuests(): Promise<Guest[]> {
   return guestListSchema.parse(await apiClient.get("guests").json())
@@ -73,7 +33,7 @@ export async function createGuests(inputs: GuestInput[]): Promise<{ count: numbe
 }
 
 export async function updateGuest(id: string, input: Partial<GuestInput>): Promise<Guest> {
-  const body = guestInputSchema.partial().refine((value) => Object.keys(value).length > 0).parse(input)
+  const body = guestUpdateSchema.parse(input)
   return guestSchema.parse(await apiClient.patch(`guests/${id}`, { json: body }).json())
 }
 

@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getGuest, guestKeys, updateGuest, type Guest } from "@/lib/api/guests"
 
-type GuestEdits = Pick<Guest, "firstName" | "lastName" | "phoneNumber" | "checkInDate" | "checkOutDate" | "roomNumber" | "floorNumber"> & {
+type GuestEdits = Pick<Guest, "firstName" | "lastName" | "phoneNumber" | "checkInDate" | "checkOutDate" | "roomNumber" | "floorNumber" | "marketingConsent"> & {
   email: string
   address: string
 }
@@ -50,6 +50,7 @@ export default function GuestProfilePage() {
     checkOutDate: data.checkOutDate,
     roomNumber: data.roomNumber,
     floorNumber: data.floorNumber,
+    marketingConsent: data.marketingConsent,
   } : null
   const form = edits ?? initialForm
 
@@ -68,6 +69,10 @@ export default function GuestProfilePage() {
   const setNumberField = (field: "roomNumber" | "floorNumber", value: string) => setEdits((current) => ({
     ...(current ?? form),
     [field]: Number(value),
+  }))
+  const setMarketingConsent = (value: boolean) => setEdits((current) => ({
+    ...(current ?? form),
+    marketingConsent: value,
   }))
 
   async function save() {
@@ -101,6 +106,15 @@ export default function GuestProfilePage() {
           <div className="space-y-2"><Label htmlFor="guest-profile-email">Email <span className="text-muted-foreground">(optional)</span></Label><Input id="guest-profile-email" type="email" value={form.email} onChange={(event) => setField("email", event.target.value)} /></div>
           <div className="space-y-2"><Label htmlFor="guest-profile-address">Address <span className="text-muted-foreground">(optional)</span></Label><Input id="guest-profile-address" autoComplete="street-address" value={form.address} onChange={(event) => setField("address", event.target.value)} /></div>
           <div className="space-y-2"><Label htmlFor="guest-profile-phone">Phone number</Label><Input id="guest-profile-phone" type="tel" maxLength={32} value={form.phoneNumber} onChange={(event) => setField("phoneNumber", event.target.value)} /></div>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">Marketing consent</legend>
+            <div className="flex gap-5">
+              {[true, false].map((consent) => <label key={String(consent)} className="inline-flex items-center gap-2 text-sm">
+                <input type="radio" name="guest-profile-marketing-consent" value={String(consent)} checked={form.marketingConsent === consent} onChange={() => setMarketingConsent(consent)} className="size-4 accent-slate-900" />
+                {consent ? "True" : "False"}
+              </label>)}
+            </div>
+          </fieldset>
         </div>
       </div>
       <div className="border-t pt-5">

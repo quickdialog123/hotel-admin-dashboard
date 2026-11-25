@@ -10,6 +10,7 @@ export type GuestColumnMapping = {
   checkOutDate: number | null
   roomNumber: number | null
   floorNumber: number | null
+  marketingConsent: number | null
 }
 
 export type GuestImportInput = {
@@ -22,15 +23,17 @@ export type GuestImportInput = {
   checkOutDate: string
   roomNumber: number
   floorNumber: number
+  marketingConsent: boolean
 }
 
 type GuestField = keyof GuestColumnMapping
 
-export type GuestImportValues = Omit<GuestImportInput, "email" | "address" | "roomNumber" | "floorNumber"> & {
+export type GuestImportValues = Omit<GuestImportInput, "email" | "address" | "roomNumber" | "floorNumber" | "marketingConsent"> & {
   email: string
   address: string
   roomNumber: string | number
   floorNumber: string | number
+  marketingConsent: string | boolean
 }
 
 export type GuestPreviewRow = {
@@ -50,6 +53,7 @@ const FIELD_ALIASES: Record<GuestField, Set<string>> = {
   checkOutDate: new Set(["checkout", "checkoutdate", "departuredate"]),
   roomNumber: new Set(["room", "roomnumber"]),
   floorNumber: new Set(["floor", "floornumber"]),
+  marketingConsent: new Set(["marketingconsent", "marketingoptin", "marketingoptedin", "optedinmarketing"]),
 }
 
 const FIELD_LABELS: Record<GuestField, string> = {
@@ -62,6 +66,7 @@ const FIELD_LABELS: Record<GuestField, string> = {
   checkOutDate: "Check-out date",
   roomNumber: "Room number",
   floorNumber: "Floor number",
+  marketingConsent: "Marketing consent",
 }
 
 const GUEST_FIELDS = Object.keys(FIELD_LABELS) as GuestField[]
@@ -131,6 +136,16 @@ export function buildGuestPreview(rows: string[][], mapping: GuestColumnMapping,
       }
     }
 
+    if (mapping.marketingConsent !== null) {
+      const consent = String(values.marketingConsent).trim().toLowerCase()
+      if (!consent) values.marketingConsent = false
+      else if (["true", "1", "yes", "y"].includes(consent)) values.marketingConsent = true
+      else if (["false", "0", "no", "n"].includes(consent)) values.marketingConsent = false
+      else errors.marketingConsent = "Enter marketing consent as true or false."
+    } else {
+      values.marketingConsent = false
+    }
+
     if (mapping.checkInDate !== null && mapping.checkOutDate !== null && !errors.checkInDate && !errors.checkOutDate && values.checkOutDate <= values.checkInDate) {
       errors.checkOutDate = "Check-out must be after check-in."
     }
@@ -149,6 +164,7 @@ export function buildGuestPreview(rows: string[][], mapping: GuestColumnMapping,
         checkOutDate: values.checkOutDate,
         roomNumber: Number(values.roomNumber),
         floorNumber: Number(values.floorNumber),
+        marketingConsent: Boolean(values.marketingConsent),
       } : null,
       errors,
     }

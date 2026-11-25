@@ -77,7 +77,6 @@ export function GuestSelection({ guests, loading, error, onRetry, selectedIds, o
       <span className="text-xs text-muted-foreground">Check-in &lt; reference date and check-out &gt; reference date</span>
     </div>
     <p className="text-xs text-muted-foreground">Reference date uses {timeZone}. The hotel timezone currently comes from a frontend setting, with UTC as fallback. Changing the stay filter removes selected guests outside the new date. Search keeps your selection.</p>
-    {category === "MARKETING" && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">The guest API does not provide marketing consent. Guests cannot qualify for this Marketing template until consent is available.</p>}
     {error ? <ErrorState message={error} onRetry={onRetry} /> : loading ? <ListSkeleton rows={5} /> : <>
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
         <p><span className="font-semibold">{visible.length}</span> matching · <span className="font-semibold">{selectedIds.length}</span> selected · <span className="font-semibold">{visible.length - eligible.length}</span> unavailable</p>
@@ -96,7 +95,7 @@ export function GuestSelection({ guests, loading, error, onRetry, selectedIds, o
               <td className="whitespace-nowrap px-4 py-3">{guest.phoneNumber || "—"}</td>
               <td className="whitespace-nowrap px-4 py-3">{formatGuestDate(guest.checkInDate)}</td>
               <td className="whitespace-nowrap px-4 py-3">{formatGuestDate(guest.checkOutDate)}</td>
-              <td className="px-4 py-3 text-muted-foreground">Unknown</td>
+              <td className="px-4 py-3 text-muted-foreground">{guest.marketingConsent ? "True" : "False"}</td>
             </tr>
           })}</tbody>
         </table>
