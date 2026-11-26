@@ -46,10 +46,22 @@ export default function CampaignsPage() {
     (filter === "ALL" || campaign.status === filter) && campaign.name.toLowerCase().includes(search.trim().toLowerCase()),
   )
 
+  async function handleDeleteCampaign() {
+    if (!hotelId || !deleting) return
+    try {
+      await deleteCampaign(deleting.id)
+      await queryClient.invalidateQueries({ queryKey: campaignKeys.list(hotelId) })
+      toast.success("Campaign deleted")
+      setDeleting(null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete campaign")
+    }
+  }
+
   return <>
     <PageHeader title="Campaigns" description="Manage WhatsApp campaigns and prepare broadcasts."
       actions={<Link href="/campaigns/new" className={buttonVariants({ className: "h-9 gap-2 px-4" })}><Plus className="size-4" aria-hidden /> New Campaign</Link>} />
-  {status === "loading" ? <ListSkeleton /> : !hotelId ? <ErrorState message="No hotel is assigned to your account." /> : <>
+    {status === "loading" ? <ListSkeleton /> : !hotelId ? <ErrorState message="No hotel is assigned to your account." /> : <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <SearchBar value={search} onChange={setSearch} placeholder="Search campaigns..." label="Search campaigns" showSubmit={false} className="w-full max-w-sm flex-1" />
         <PillSelect value={filter} onChange={setFilter} options={[...filters]} label="Filter campaigns by status" />
@@ -88,17 +100,7 @@ export default function CampaignsPage() {
         title={`Delete ${deleting?.name || "campaign"}?`}
         description="This permanently deletes the draft campaign from the hotel backend. This action cannot be undone."
         confirmLabel="Delete campaign"
-        onConfirm={async () => {
-          if (!deleting) return
-          try {
-            await deleteCampaign(deleting.id)
-            void queryClient.invalidateQueries({ queryKey: campaignKeys.list(hotelId) })
-            toast.success("Campaign deleted")
-            setDeleting(null)
-          } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Could not delete campaign")
-          }
-        }} />
+        onConfirm={handleDeleteCampaign} />
     </>}
   </>
 }

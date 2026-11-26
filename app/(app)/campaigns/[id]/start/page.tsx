@@ -98,7 +98,6 @@ export default function StartCampaignPage() {
     ...(guestsQuery.error ? ["Guests could not be loaded."] : !guestsQuery.data ? ["Checking the saved guests."] : []),
     ...(!selectedIds.length ? ["The campaign has no selected guests."] : []),
     ...(guestsQuery.data && selectedIds.some((guestId) => !byId.has(guestId)) ? ["One or more selected guests are no longer available."] : []),
-    ...(template?.buttons.some((button) => button.type === "MPM") ? ["The current backend sender does not include selected products in multi-product messages yet."] : []),
     ...(showCatalogProducts && (catalogQuery.error || catalogQuery.data?.status !== "connected") ? ["The connected Meta catalog could not be verified."] : []),
     ...(campaign.productRetailerIds.length > 0 && productsQuery.data && selectedProducts.length !== campaign.productRetailerIds.length ? ["Some selected products are no longer available in the catalog."] : []),
   ] : []
@@ -145,6 +144,7 @@ export default function StartCampaignPage() {
         <section className="rounded-2xl border bg-white p-5 sm:p-6">
           <h2 className="font-semibold">Readiness review</h2>
           {issues.length ? <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-900">{issues.map((issue, index) => <li key={`${index}:${issue}`}>{issue}</li>)}</ul> : <p className="mt-2 text-sm text-muted-foreground">The saved audience and template passed the available frontend checks. The backend must revalidate them before sending.</p>}
+          {template?.buttons.some((button) => button.type === "MPM") && <p role="status" className="mt-3 text-sm text-amber-900">The current backend sender does not include selected products in multi-product messages. Sending may fail or produce an incomplete message.</p>}
           <p className="mt-4 text-sm text-muted-foreground">Starting sends the approved template and changes the campaign status to Sending. Variable mappings are not part of this preview.</p>
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-5"><Link href={`/campaigns/${campaign.id}/edit`} className={buttonVariants({ variant: "outline" })}>Edit campaign</Link><Button type="button" onClick={() => startMutation.mutate()} disabled={issues.length > 0 || startMutation.isPending}>{startMutation.isPending ? "Starting…" : "Confirm Send"}</Button></div>
         </section>

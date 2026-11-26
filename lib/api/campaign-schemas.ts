@@ -13,7 +13,7 @@ const guestIdsSchema = z.array(z.uuid())
 export const campaignCreateSchema = z.object({
   name: z.string().trim().min(1).max(120),
   templateName: z.string().regex(/^[a-z0-9_]+$/),
-  templateLanguage: z.string().trim().min(2).max(10),
+  templateLanguage: z.string().regex(/^[a-z]{2,3}(?:_[A-Z]{2})?$/),
   guestIds: guestIdsSchema.optional(),
   productRetailerIds: productRetailerIdsSchema.optional(),
 })

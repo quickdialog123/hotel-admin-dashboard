@@ -1,7 +1,7 @@
 "use client"
 
 import { useParams } from "next/navigation"
-import CampaignWizard from "@/app/(app)/campaigns/new/page"
+import { CampaignWizard } from "@/components/campaigns/campaign-wizard"
 
 export default function EditCampaignPage() {
   const { id } = useParams<{ id: string }>()
