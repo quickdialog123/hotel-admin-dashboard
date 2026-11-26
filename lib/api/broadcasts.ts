@@ -75,7 +75,7 @@ const templateInputSchema = z.object({
   name: z.string().regex(/^[a-z0-9_]+$/), category: z.enum(["MARKETING", "UTILITY"]),
   marketingType: z.enum(["DEFAULT", "CATALOG"]).optional(),
   catalogFormat: z.enum(["CATALOG_MESSAGE", "MULTI_PRODUCT_MESSAGE"]).optional(),
-  variableType: z.enum(["NAME", "NUMBER"]).optional(),
+  variableType: z.literal("NAME").optional(),
   language: z.string().regex(/^[a-z]{2,3}(?:_[A-Z]{2})?$/),
   header: z.union([z.object({ type: z.literal("TEXT"), text: z.string().trim().min(1).max(60) }), z.object({ type: z.enum(["IMAGE", "VIDEO"]), mediaHandle: z.string().min(1), mediaSample: z.string().optional() }), z.null()]),
   body: z.string().trim().min(1).max(1024), footer: z.string().trim().max(60).nullable(),

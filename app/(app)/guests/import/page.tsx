@@ -6,7 +6,7 @@ import { useMemo, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { AlertCircle, ArrowLeft, Check, FileSpreadsheet, GripVertical, LoaderCircle, Upload, UserRound, AtSign, Phone, CalendarDays, BedDouble, Building2 } from "lucide-react"
+import { AlertCircle, ArrowLeft, Check, FileSpreadsheet, GripVertical, LoaderCircle, Upload, UserRound, AtSign, Phone, CalendarDays, BedDouble, Building2, Megaphone } from "lucide-react"
 
 import { PageHeader } from "@/components/app/page-header"
 import { Button } from "@/components/ui/button"
@@ -26,6 +26,7 @@ const GUEST_FIELDS = [
   { key: "checkOutDate", label: "Check-out date", icon: CalendarDays },
   { key: "roomNumber", label: "Room number", icon: BedDouble },
   { key: "floorNumber", label: "Floor number", icon: Building2 },
+  { key: "marketingConsent", label: "Marketing consent (optional)", icon: Megaphone },
 ] as const
 
 const REQUIRED_FIELDS = ["firstName", "lastName", "phoneNumber", "checkInDate", "checkOutDate", "roomNumber", "floorNumber"] as const
@@ -42,7 +43,7 @@ export default function GuestImportPage() {
   const fileInput = useRef<HTMLInputElement>(null)
   const [fileName, setFileName] = useState("")
   const [rawRows, setRawRows] = useState<string[][]>([])
-  const emptyMapping = (): GuestColumnMapping => ({ firstName: null, lastName: null, email: null, address: null, phoneNumber: null, checkInDate: null, checkOutDate: null, roomNumber: null, floorNumber: null })
+  const emptyMapping = (): GuestColumnMapping => ({ firstName: null, lastName: null, email: null, address: null, phoneNumber: null, checkInDate: null, checkOutDate: null, roomNumber: null, floorNumber: null, marketingConsent: null })
   const [mapping, setMapping] = useState<GuestColumnMapping>(emptyMapping)
   const [skipFirstRow, setSkipFirstRow] = useState(true)
   const [fileError, setFileError] = useState<string | null>(null)
@@ -201,7 +202,7 @@ export default function GuestImportPage() {
 
             <div className="flex flex-wrap gap-x-6 gap-y-3 px-5 py-4">
               <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={skipFirstRow} onChange={(event) => setSkipHeader(event.target.checked)} className="size-4 accent-slate-900" /> Skip the first row (column headers)</label>
-              <span className="text-sm text-muted-foreground">{completeMapping ? "All required fields mapped" : "Map all seven required fields to continue. Email and address are optional."}</span>
+              <span className="text-sm text-muted-foreground">{completeMapping ? "All required fields mapped" : "Map all seven required fields to continue. Email, address, and marketing consent are optional."}</span>
             </div>
 
             {tooManyRows && <div role="alert" className="mx-5 mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><AlertCircle className="mt-0.5 size-4 shrink-0" />This file has {dataRows.length} guest rows. The bulk importer accepts up to 500 rows.</div>}

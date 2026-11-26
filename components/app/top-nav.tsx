@@ -47,8 +47,8 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
-    href: "/broadcasts",
-    label: "Marketing",
+    href: "/campaigns",
+    label: "Campaigns",
     children: [
       { href: "/templates", label: "Templates" },
       { href: "/catalogue", label: "Catalogue" },

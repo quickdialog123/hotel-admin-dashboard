@@ -199,11 +199,11 @@ function AddGuestDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
     mutationFn: createGuest,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: guestKeys.all }),
   })
-  const initialValues = { firstName: "", lastName: "", email: "", address: "", phoneNumber: "", checkInDate: "", checkOutDate: "", roomNumber: "", floorNumber: "" }
+  const initialValues = { firstName: "", lastName: "", email: "", address: "", phoneNumber: "", checkInDate: "", checkOutDate: "", roomNumber: "", floorNumber: "", marketingConsent: false }
   const [values, setValues] = useState(initialValues)
   const busy = createMutation.isPending
 
-  function setField(field: keyof typeof initialValues, value: string) {
+  function setField(field: Exclude<keyof typeof initialValues, "marketingConsent">, value: string) {
     setValues((current) => ({ ...current, [field]: value }))
   }
 
@@ -219,6 +219,7 @@ function AddGuestDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
         phoneNumber: values.phoneNumber.trim(),
         roomNumber: Number(values.roomNumber),
         floorNumber: Number(values.floorNumber),
+        marketingConsent: values.marketingConsent,
       }
       await createMutation.mutateAsync(input)
       toast.success("Guest added")
@@ -242,6 +243,15 @@ function AddGuestDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
         <div className="space-y-2"><Label htmlFor="guest-check-out">Check-out date</Label><Input id="guest-check-out" type="date" min={values.checkInDate ? dayAfterGuestDate(values.checkInDate) : undefined} value={values.checkOutDate} onChange={(event) => setField("checkOutDate", event.target.value)} required /></div>
         <div className="space-y-2"><Label htmlFor="guest-room">Room number</Label><Input id="guest-room" type="number" min="1" step="1" value={values.roomNumber} onChange={(event) => setField("roomNumber", event.target.value)} required /></div>
         <div className="space-y-2"><Label htmlFor="guest-floor">Floor number</Label><Input id="guest-floor" type="number" step="1" value={values.floorNumber} onChange={(event) => setField("floorNumber", event.target.value)} required /></div>
+        <fieldset className="space-y-2 sm:col-span-2">
+          <legend className="text-sm font-medium">Marketing consent</legend>
+          <div className="flex gap-5">
+            {[true, false].map((consent) => <label key={String(consent)} className="inline-flex items-center gap-2 text-sm">
+              <input type="radio" name="guest-marketing-consent" value={String(consent)} checked={values.marketingConsent === consent} onChange={() => setValues((current) => ({ ...current, marketingConsent: consent }))} className="size-4 accent-slate-900" />
+              {consent ? "True" : "False"}
+            </label>)}
+          </div>
+        </fieldset>
       </div>
       <DialogFooter><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? "Adding…" : "Add guest"}</Button></DialogFooter>
     </form>
