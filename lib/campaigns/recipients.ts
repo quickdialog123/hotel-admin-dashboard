@@ -8,7 +8,7 @@ export function dateInTimeZone(timeZone: string, now = new Date()): string {
 }
 
 export function isInHouseOn(guest: Pick<Guest, "checkInDate" | "checkOutDate">, referenceDate: string): boolean {
-  return guest.checkInDate < referenceDate && guest.checkOutDate > referenceDate
+  return guest.checkInDate <= referenceDate && guest.checkOutDate > referenceDate
 }
 
 export function recipientIneligibility(guest: Guest, category: string): string | null {

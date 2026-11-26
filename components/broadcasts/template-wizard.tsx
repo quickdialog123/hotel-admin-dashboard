@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { extractVariables, saveTemplate, uploadTemplateMedia, type ButtonType, type CatalogFormat, type HeaderType, type MarketingTemplateType, type TemplateButton, type TemplateCategory, type TemplateHeader, type VariableType } from "@/lib/api/broadcasts"
+import { extractVariables, saveTemplate, uploadTemplateMedia, type ButtonType, type CatalogFormat, type HeaderType, type MarketingTemplateType, type TemplateButton, type TemplateCategory, type TemplateHeader } from "@/lib/api/broadcasts"
 import type { TemplateInput } from "@/lib/api/broadcasts"
 import { deleteTemplateDraft, saveTemplateDraft } from "@/lib/api/template-drafts"
 import { saveTemplateMediaPreview } from "@/lib/api/template-media-cache"
@@ -52,7 +52,6 @@ const BUTTON_TYPES: { value: ButtonType | "NONE"; label: string }[] = [
   { value: "PHONE_NUMBER", label: "Call phone number" },
 ]
 const NAME_RE = /^[a-z0-9_]+$/
-const VARIABLE_TYPES: { value: VariableType; label: string }[] = [{ value: "NAME", label: "Name" }, { value: "NUMBER", label: "Number" }]
 const MEDIA_TYPES: { value: "NONE" | "IMAGE" | "VIDEO"; label: string }[] = [{ value: "NONE", label: "None" }, { value: "IMAGE", label: "Image" }, { value: "VIDEO", label: "Video" }]
 
 export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; draftId?: string }) {
@@ -62,7 +61,6 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
   const [category, setCategory] = useState<TemplateCategory>(initial?.category ?? "MARKETING")
   const [marketingType, setMarketingType] = useState<MarketingTemplateType>(initial?.marketingType ?? (initial?.buttons.some((button) => button.type === "CATALOG" || button.type === "MPM") ? "CATALOG" : "DEFAULT"))
   const [catalogFormat, setCatalogFormat] = useState<CatalogFormat>(initial?.catalogFormat ?? (initial?.buttons.some((button) => button.type === "MPM") ? "MULTI_PRODUCT_MESSAGE" : "CATALOG_MESSAGE"))
-  const [variableType, setVariableType] = useState<VariableType>(initial?.variableType ?? "NAME")
   const [language, setLanguage] = useState(initial?.language ?? "en_GB")
   const [headerType, setHeaderType] = useState<HeaderType | "NONE">(initial?.header?.type ?? "NONE")
   const [headerText, setHeaderText] = useState(initial?.header?.text ?? "")
@@ -84,7 +82,7 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
   const isMultiProductMessage = category === "MARKETING" && marketingType === "CATALOG" && catalogFormat === "MULTI_PRODUCT_MESSAGE"
   const header: TemplateHeader | null = isCatalogMessage ? null : isMultiProductMessage ? { type: "TEXT", text: headerText } : headerType === "NONE" ? null : headerType === "TEXT" ? { type: "TEXT", text: headerText } : { type: headerType, mediaSample: headerFile }
   const cleanButtons: TemplateButton[] = isCatalogMessage ? [{ type: "CATALOG", text: "View catalog" }] : isMultiProductMessage ? [{ type: "MPM", text: "View items" }] : buttons.filter((b) => b.text.trim())
-  const vars = extractVariables(body + (isCatalogMessage ? "" : " " + headerText))
+  const vars = extractVariables(body + " " + (header?.type === "TEXT" ? header.text : ""))
   const sampleValues = Object.fromEntries(vars.map((v) => [v, examples[v] ?? ""]))
   const isDefaultMarketing = category === "MARKETING" && marketingType === "DEFAULT"
   const steps = isDefaultMarketing ? DEFAULT_STEPS : isCatalogMessage ? CATALOG_STEPS : isMultiProductMessage ? MULTI_PRODUCT_STEPS : STEPS
@@ -93,9 +91,9 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
   const nameOk = NAME_RE.test(name)
   const bodyOk = body.trim().length > 0 && body.length <= 1024
   const headerOk = isMultiProductMessage ? headerText.trim().length > 0 : headerType === "NONE" || (headerType === "TEXT" ? headerText.trim().length > 0 : !!headerFile)
-  const variablesOk = !isDefaultMarketing || vars.every((v) => variableType === "NUMBER" ? /^\d+$/.test(v) : /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(v))
+  const variablesOk = vars.every((v) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(v))
   const buttonsOk = buttonType === "NONE" || buttons.every((b) => b.text.trim() && (b.type !== "URL" || /^https?:\/\//.test(b.url ?? "")) && (b.type !== "PHONE_NUMBER" || /^\+?[0-9]{7,}$/.test(b.phoneNumber ?? "")))
-  const stepOk = isDefaultMarketing ? [nameOk, headerOk && bodyOk && buttonsOk && variablesOk, true][step] : isCatalogMessage ? [nameOk, bodyOk, true, true][step] : isMultiProductMessage ? [nameOk, headerOk, bodyOk, true, true][step] : [nameOk, headerOk, bodyOk, true, buttonsOk, true][step]
+  const stepOk = isDefaultMarketing ? [nameOk, headerOk && bodyOk && buttonsOk && variablesOk, true][step] : isCatalogMessage ? [nameOk, bodyOk && variablesOk, true, true][step] : isMultiProductMessage ? [nameOk, headerOk, bodyOk && variablesOk, true, true][step] : [nameOk, headerOk, bodyOk && variablesOk, true, buttonsOk, true][step]
 
   function next() {
     setTouched(true)
@@ -151,7 +149,7 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
         uploadedFile = file
         submittedHeader = { type: header.type, mediaHandle: file ? await uploadTemplateMedia(file) : initial?.header?.mediaHandle }
       }
-      const input = { name, category, marketingType: category === "MARKETING" ? marketingType : undefined, catalogFormat: category === "MARKETING" && marketingType === "CATALOG" ? catalogFormat : undefined, variableType: isDefaultMarketing ? variableType : undefined, language, header: submittedHeader, body: body.trim(), footer: footer.trim() || null, buttons: cleanButtons, sampleValues }
+      const input = { name, category, marketingType: category === "MARKETING" ? marketingType : undefined, catalogFormat: category === "MARKETING" && marketingType === "CATALOG" ? catalogFormat : undefined, variableType: "NAME" as const, language, header: submittedHeader, body: body.trim(), footer: footer.trim() || null, buttons: cleanButtons, sampleValues }
       if (submit) {
         const saved = await saveTemplate(input)
         if (uploadedFile) {
@@ -180,7 +178,7 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
     }
   }
 
-  const invalidAll = !nameOk || !bodyOk || (!isCatalogMessage && (!headerOk || (!isMultiProductMessage && !buttonsOk) || !variablesOk)) || vars.some((v) => !sampleValues[v]?.trim())
+  const invalidAll = !nameOk || !bodyOk || !variablesOk || (!isCatalogMessage && (!headerOk || (!isMultiProductMessage && !buttonsOk))) || vars.some((v) => !sampleValues[v]?.trim())
 
   return (
     <div className="grid gap-8 lg:grid-cols-[200px_1fr_320px]">
@@ -220,7 +218,6 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
 
         {step === 1 && isDefaultMarketing && <div className="mb-6 space-y-5">
           <h2 className="font-semibold">Content</h2>
-          <div className="space-y-2"><Label>Type of variable</Label><div><PillSelect label="Type of variable" value={variableType} onChange={setVariableType} options={VARIABLE_TYPES} /></div></div>
           <div className="space-y-2"><Label>Media sample</Label><div><PillSelect label="Media sample" value={headerType === "IMAGE" || headerType === "VIDEO" ? headerType : "NONE"} onChange={(value) => { setHeaderType(value); removeMedia() }} options={MEDIA_TYPES} /></div></div>
         </div>}
         {(step === 1 && !isCatalogMessage) && (
@@ -264,7 +261,7 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
             </div>
             {vars.length > 0 && <div className="flex flex-wrap gap-1.5 pt-1">{vars.map((v) => <StatusPill key={v}>{`{{${v}}}`}</StatusPill>)}</div>}
             {vars.map((v) => <div key={v} className="space-y-1"><Label htmlFor={`sample-${v}`}>Example for {`{{${v}}}`}</Label><Input id={`sample-${v}`} value={examples[v] ?? ""} onChange={(e) => setExamples({ ...examples, [v]: e.target.value })} /></div>)}
-            {touched && !variablesOk && <p className="text-sm text-destructive">Use {variableType === "NUMBER" ? "numbered variables such as {{1}}" : "named variables such as {{firstname}}"}.</p>}
+            {touched && !variablesOk && <p className="text-sm text-destructive">Use named variables such as {"{{guest_name}}"}.</p>}
           </div>
         )}
 
@@ -315,7 +312,8 @@ export function TemplateWizard({ initial, draftId }: { initial?: TemplateInput; 
                 ["Category", CATEGORIES.find((c) => c.value === category)?.label],
                 ...(category === "MARKETING" ? [["Marketing template type", MARKETING_TYPES.find((t) => t.value === marketingType)?.label]] : []),
                 ...(category === "MARKETING" && marketingType === "CATALOG" ? [["Catalog format", CATALOG_FORMATS.find((f) => f.value === catalogFormat)?.label]] : []),
-                ...(isDefaultMarketing ? [["Type of variable", variableType === "NAME" ? "Name" : "Number"], ["Media sample", headerType === "IMAGE" || headerType === "VIDEO" ? headerType.toLowerCase() : "None"]] : []),
+                ["Type of variable", "Name"],
+                ...(isDefaultMarketing ? [["Media sample", headerType === "IMAGE" || headerType === "VIDEO" ? headerType.toLowerCase() : "None"]] : []),
                 ["Language", LANGUAGES.find((l) => l.value === language)?.label],
                 ["Header", header ? (header.type === "TEXT" ? header.text : header.type.toLowerCase()) : "None"],
                 ["Footer", footer || "None"],

@@ -74,7 +74,7 @@ export function GuestSelection({ guests, loading, error, onRetry, selectedIds, o
     <div className="flex flex-wrap items-center gap-3">
       <Checkbox id="campaign-in-house" checked={inHouse} onCheckedChange={(value) => updateStay(Boolean(value), referenceDate)} />
       <Label htmlFor="campaign-in-house" className="cursor-pointer">Currently In-House</Label>
-      <span className="text-xs text-muted-foreground">Check-in &lt; reference date and check-out &gt; reference date</span>
+      <span className="text-xs text-muted-foreground">Check-in &le; reference date and check-out &gt; reference date</span>
     </div>
     <p className="text-xs text-muted-foreground">Reference date uses {timeZone}. The hotel timezone currently comes from a frontend setting, with UTC as fallback. Changing the stay filter removes selected guests outside the new date. Search keeps your selection.</p>
     {error ? <ErrorState message={error} onRetry={onRetry} /> : loading ? <ListSkeleton rows={5} /> : <>
